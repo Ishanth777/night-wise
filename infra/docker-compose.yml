@@ -1,0 +1,36 @@
+name: nightwise
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: nightwise-postgres
+    environment:
+      POSTGRES_USER: nightwise
+      POSTGRES_PASSWORD: nightwise
+      POSTGRES_DB: nightwise
+    ports: ["5432:5432"]
+    volumes:
+      - nightwise_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nightwise -d nightwise"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: nightwise-redis
+    ports: ["6379:6379"]
+    command: ["redis-server", "--appendonly", "no", "--save", ""]
+
+  valhalla:
+    image: ghcr.io/valhalla/valhalla:latest
+    container_name: nightwise-valhalla
+    command: ["valhalla_service", "/custom_files/valhalla.json", "1"]
+    ports: ["8002:8002"]
+    volumes:
+      - ../data/valhalla:/data/valhalla
+      - ../tiles:/custom_files
+
+volumes:
+  nightwise_pgdata:
