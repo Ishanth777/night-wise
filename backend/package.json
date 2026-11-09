@@ -15,11 +15,11 @@
     "test": "vitest run",
     "test:scoring": "vitest run src/scoring",
     "test:integration": "RUN_INTEGRATION=1 vitest run src/__tests__/integration",
-    "migrate": "node-pg-migrate -m src/db/migrations up",
-    "migrate:down": "node-pg-migrate -m src/db/migrations down",
+    "migrate": "bash ../scripts/migrate.sh",
     "seed:data-sources": "tsx src/db/seeds/dataSources.seed.ts",
     "ingest:osm": "tsx src/jobs/osm-ingest.job.ts",
-    "openapi": "tsx src/api/schemas/generate-openapi.ts"
+    "openapi": "tsx src/api/schemas/generate-openapi.ts",
+    "smoke": "bash ../scripts/smoke-api.sh"
   },
   "dependencies": {
     "@sentry/node": "^8.50.0",
@@ -50,7 +50,6 @@
     "@types/uuid": "^10.0.0",
     "@vitest/coverage-v8": "^2.1.8",
     "eslint": "^9.17.0",
-    "node-pg-migrate": "^7.9.1",
     "pino-pretty": "^13.0.0",
     "supertest": "^7.0.0",
     "tsx": "^4.19.2",

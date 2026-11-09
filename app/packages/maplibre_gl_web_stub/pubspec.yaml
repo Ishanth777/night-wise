@@ -1,0 +1,24 @@
+name: maplibre_gl_web
+description: >-
+  No-op web registration for NightWise. The app draws a lightweight canvas map
+  preview on web because maplibre_gl_web 0.21 is incompatible with the current
+  Flutter web engine; native builds still use the real MapLibre GL plugin.
+version: 0.21.0
+publish_to: "none"
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      web:
+        pluginClass: MapLibreMapPlugin
+        fileName: maplibre_gl_web.dart

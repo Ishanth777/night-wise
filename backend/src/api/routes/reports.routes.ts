@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { validate, asyncWrap } from '../middleware/validate.js';
 import { requireAuth, attachDeviceHash } from '../middleware/auth.js';
-import { CreateReportSchema, NearbySchema } from '../schemas/index.js';
+import { CreateReportSchema, ModerateReportSchema, NearbySchema } from '../schemas/index.js';
 import { reportsRateLimit } from '../middleware/ratelimit.js';
 import { createReport, nearbyReports, listPending, moderate } from '../../repositories/reports.repo.js';
 import { verifyAccessToken } from '../../services/auth.service.js';
@@ -41,14 +41,17 @@ reportRoutes.get('/nearby', validate([{ schema: NearbySchema, source: 'query' }]
 
 // ---- moderation (admin) ----
 reportRoutes.get('/pending', requireAuth,
-  asyncWrap(async (_req, res) => {
-    (`
-      role check enforced by requireRole in production; MVP admin gate below
-    `);
+  asyncWrap(async (req, res) => {
+    const user = (req as { user?: { role?: string } }).user;
+    if (user?.role !== 'moderator' && user?.role !== 'admin') {
+      res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Moderator role required' } });
+      return;
+    }
     res.json({ data: await listPending(50) });
   }));
 
 reportRoutes.post('/:id/moderate', requireAuth,
+  validate([{ schema: ModerateReportSchema, source: 'body' }]),
   asyncWrap(async (req, res) => {
     const { decision, note } = req.body as { decision: 'published' | 'rejected'; note?: string };
     const user = (req as { user?: { role?: string } }).user;

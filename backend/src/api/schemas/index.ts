@@ -37,6 +37,11 @@ export const CreateReportSchema = z.object({
 });
 export type CreateReport = z.infer<typeof CreateReportSchema>;
 
+export const ModerateReportSchema = z.object({
+  decision: z.enum(['published', 'rejected']),
+  note: z.string().max(500).optional(),
+});
+
 export const RegisterSchema = z.object({
   email: z.string().email().max(320),
   password: z.string().min(8).max(72),
@@ -45,14 +50,14 @@ export const RegisterSchema = z.object({
 export const LoginSchema = RegisterSchema.pick({ email: true, password: true });
 
 export const NearbySchema = z.object({
-  lat: LatSchema,
-  lng: LngSchema,
+  lat: z.coerce.number().min(-90).max(90),
+  lng: z.coerce.number().min(-180).max(180),
   radiusM: z.coerce.number().int().min(50).max(3000).default(1000),
 });
 export type NearbyQuery = z.infer<typeof NearbySchema>;
 
 export const SearchPlacesSchema = z.object({
   q: z.string().min(2).max(120),
-  lat: LatSchema.optional(),
-  lng: LngSchema.optional(),
+  lat: z.coerce.number().min(-90).max(90).optional(),
+  lng: z.coerce.number().min(-180).max(180).optional(),
 });

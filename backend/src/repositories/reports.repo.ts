@@ -1,7 +1,6 @@
 /** Community reports repo — pseudonymous, moderation-queued (plan §9.4, §15.4). */
 import crypto from 'node:crypto';
 import { getPool } from '../db/pool.js';
-import { cellId } from '../lib/geo.js';
 import type { CreateReport } from '../api/schemas/index.js';
 
 export interface ReportDto {
@@ -20,15 +19,17 @@ export async function createReport(
   input: CreateReport,
   userId: string | null,
   fingerprint: string | null,
-): Promise<ReportDto & { duplicateHint: { nearbySameKind24h: number }> }> {
+): Promise<ReportDto & { duplicateHint: { nearbySameKind24h: number } }> {
   const pool = getPool();
-  const geo = [input.lng, input.lat];
-  const cell = cellIdFrom([input.lat, input.lng]);
 
   const dup = await pool.query(
     `SELECT count(*) AS n FROM safety_reports
      WHERE kind = $1 AND status <> 'rejected'
-       AND ST_DWithin(geom, ST_MakePoint($3, $2), 100)
+       AND ST_DWithin(
+             geom::geography,
+             ST_SetSRID(ST_MakePoint($3, $2), 4326)::geography,
+             100
+           )
        AND created_at > now() - interval '24 hours'`,
     [input.kind, input.lat, input.lng],
   );
@@ -41,7 +42,7 @@ export async function createReport(
      RETURNING id, kind, severity, note, status, created_at,
                ST_Y(geom) AS lat, ST_X(geom) AS lng`,
     [userId, fpHash, input.kind, input.severity, input.note ?? null,
-     'pending', userId ? 0.5 : 0.35, geo[0], geo[1]],
+     'pending', userId ? 0.5 : 0.35, input.lng, input.lat],
   );
   const r = res.rows[0];
   return {
@@ -56,10 +57,6 @@ export async function createReport(
 function morphLat(lat: number): number { return Math.round((lat + (Math.sin(lat * 1e4) * 0.0002)) * 1e6) / 1e6; }
 function morphLng(lng: number): number { return Math.round((lng + (Math.cos(lng * 1e4) * 0.0002)) * 1e6) / 1e6; }
 
-function cellIdFrom(p: [number, number]): string {
-  return cellId([p[0], p[1]], 100);
-}
-
 export async function nearbyReports(
   lat: number, lng: number, radiusM: number,
 ): Promise<ReportDto[]> {
@@ -68,7 +65,7 @@ export async function nearbyReports(
             ST_Y(geom) AS lat, ST_X(geom) AS lng
      FROM safety_reports
      WHERE status = 'published'
-       AND ST_DWithin(geom, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography, $3)
+       AND ST_DWithin(geom::geography, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography, $3)
      ORDER BY created_at DESC LIMIT 50`,
     [lat, lng, radiusM],
   );

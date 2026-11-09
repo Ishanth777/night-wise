@@ -112,28 +112,51 @@ async function importAll(): Promise<IngestResult> {
 
 async function importRoads(client: PoolClient): Promise<number> {
   let count = 0;
+  const BATCH = 500;
+  let batch: Array<{
+    id: number; name: string | null; cls: string; oneway: boolean;
+    foot: string | null; lit: string | null; props: string; wkt: string;
+  }> = [];
+
+  const flush = async () => {
+    if (batch.length === 0) return;
+    await client.query(
+      `INSERT INTO roads (osm_way_id, name, class, oneway, foot_access, lit_tag, props, geom)
+       SELECT u.id, u.name, u.cls, u.oneway, u.foot, u.lit, u.props::jsonb,
+              ST_GeomFromEWKT('SRID=4326;' || u.wkt)
+       FROM UNNEST($1::bigint[], $2::text[], $3::text[], $4::boolean[], $5::text[], $6::text[], $7::text[], $8::text[])
+         AS u(id, name, cls, oneway, foot, lit, props, wkt)
+       ON CONFLICT (osm_way_id) DO NOTHING`,
+      [
+        batch.map((r) => r.id), batch.map((r) => r.name), batch.map((r) => r.cls),
+        batch.map((r) => r.oneway), batch.map((r) => r.foot), batch.map((r) => r.lit),
+        batch.map((r) => r.props), batch.map((r) => r.wkt),
+      ],
+    );
+    count += batch.length;
+    batch = [];
+  };
+
   await eachNdjsonFeature('data/_roads.geojsonseq', async (f) => {
     if (f.geometry.type !== 'LineString') return;
     const p = f.properties;
-    const osmId = Number(f.id.replace('way/', ''));
+    // osmium --add-unique-id=type_id produces ids like "w123456" / "n42"
+    const osmId = Number(String(f.id).replace(/\D/g, ''));
     if (!osmId) return;
     const hw = p.highway ?? 'road';
-    const cls = ROAD_CLASS_MAP[hw] ?? 'unknown';
-    await client.query(
-      `INSERT INTO roads (osm_way_id, name, class, oneway, foot_access, lit_tag, props, geom)
-       VALUES ($1,$2,$3,$4,$5,$6,$7, ST_SetSRID(ST_MakeLine($8), 4326))
-       ON CONFLICT (osm_way_id) DO NOTHING`,
-      [
-        osmId, p.name ?? null, cls,
-        p.oneway !== undefined ? p.oneway === 'yes' : false,
-        p.foot ?? null,
-        p.lit ?? null,
-        safePropsJson(p),
-        coordsToText(f.geometry.coordinates as number[][]),
-      ],
-    );
-    count += 1;
+    batch.push({
+      id: osmId,
+      name: p.name ?? null,
+      cls: ROAD_CLASS_MAP[hw] ?? 'unknown',
+      oneway: p.oneway === 'yes',
+      foot: p.foot ?? null,
+      lit: p.lit ?? null,
+      props: safePropsJson(p),
+      wkt: `LINESTRING(${coordsToWkt(f.geometry.coordinates as number[][])})`,
+    });
+    if (batch.length >= BATCH) await flush();
   });
+  await flush();
   return count;
 }
 
@@ -197,7 +220,7 @@ async function importPois(client: PoolClient): Promise<{
       await client.query(
         `INSERT INTO emergency_locations (type, name, contact, verified, source, geom)
          VALUES ($1, $2, $3, false, 'osm', ST_MakePoint($4, $5))`,
-        [tags.amenity, tags.name ?? null, tags.phone ?? tags['contact:phone'] ?? null, pt[0], pt[1]],
+        [tags.amenity, tags.name ?? null, tags.phone ?? tags['contact:phone'] ?? null, pt[1], pt[0]],
       );
       stats.emergency += 1;
       return;
@@ -211,7 +234,7 @@ async function importPois(client: PoolClient): Promise<{
        VALUES ('osm', $1, $2, $3, $4, $5, false, ST_MakePoint($6, $7))
        ON CONFLICT (source, source_id) DO UPDATE
          SET hours_known = $4, hours = $5, source_updated_at = now(), geom = ST_MakePoint($6, $7)`,
-      [f.id, tags.name ?? null, category, parsed.known, unpackHours(parsed.hours), pt[0], pt[1]],
+      [f.id, tags.name ?? null, category, parsed.known, unpackHours(parsed.hours), pt[1], pt[0]],
     );
     if (parsed.known) stats.hoursKnown += 1;
     stats.shops += 1;
@@ -251,8 +274,8 @@ async function eachNdjsonFeature(
   }
 }
 
-function coordsToText(coords: number[][]): string {
-  return `(${coords.map((c) => `${c[0]} ${c[1]}`).join(',')})`;
+function coordsToWkt(coords: number[][]): string {
+  return coords.map((c) => `${c[0]} ${c[1]}`).join(',');
 }
 
 function safePropsJson(p: Record<string, string>): string {

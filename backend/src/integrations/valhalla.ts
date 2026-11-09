@@ -13,12 +13,14 @@ export interface ValhallaRouteCandidate {
   durationS: number;
 }
 
+interface ValhallaTrip {
+  summary?: { length: number; time: number };
+  legs?: Array<{ shape?: string; summary?: { length: number; time: number } }>;
+}
+
 interface ValhallaRaw {
-  trip?: {
-    summary?: { length: number; time: number };
-    shape?: string;
-  };
-  alternates?: Array<{ trip?: { summary?: { length: number; time: number }; shape?: string } }>;
+  trip?: ValhallaTrip;
+  alternates?: Array<{ trip?: ValhallaTrip }>;
 }
 
 const TIMEOUT_MS = 8000;
@@ -69,35 +71,46 @@ export async function getValhallaAlternates(
     },
   };
   const raw = await breakerSingleton().fire(JSON.stringify(payload));
-  const legs: ValhallaRaw[] = [raw, ...(raw.alternates ?? [])];
-  const decoded = legs
-    .map((l, i) => ({ l, i }))
-    .filter(({ l }) => l.trip?.shape)
-    .map(({ l, i }) => ({
-      geometry: decodePolyline(l.trip!.shape!),
-      lengthKm: Number(l.trip!.summary?.length ?? 0),
-      durationS: Number(l.trip!.summary?.time ?? 0),
-      destIndex: i,
-    }));
-  return decoded;
+  const trips: ValhallaTrip[] = [raw.trip, ...(raw.alternates ?? []).map((a) => a.trip)]
+    .filter((t): t is ValhallaTrip => Boolean(t));
+  return trips
+    .map((t) => ({
+      geometry: tripGeometry(t),
+      lengthKm: Number(t.summary?.length ?? 0),
+      durationS: Number(t.summary?.time ?? 0),
+    }))
+    .filter((c) => c.geometry.length >= 2);
+}
+
+/** Concatenate per-leg encoded shapes into one GeoJSON [lng,lat] polyline. */
+function tripGeometry(trip: ValhallaTrip): number[][] {
+  const coords: number[][] = [];
+  for (const leg of trip.legs ?? []) {
+    if (!leg.shape) continue;
+    const decoded = decodePolyline(leg.shape);
+    // legs share a joint vertex — drop the duplicate
+    const start = coords.length > 0 ? 1 : 0;
+    for (let i = start; i < decoded.length; i++) coords.push(decoded[i]);
+  }
+  return coords;
 }
 
 // polyline6 decoder inlined (avoid circular import with lib/geo)
-function decodePolyline(encoded: string): number[][] {
+export function decodePolyline(encoded: string): number[][] {
   const coords: number[][] = [];
   let lat = 0, lng = 0, idx = 0;
   while (idx < encoded.length) {
-    let result = 1, shift = 0, b: number;
+    let result = 0, shift = 0, b: number;
     do {
-      b = encoded.charCodeAt(idx++) - 63 - 1;
-      result += b << shift;
+      b = encoded.charCodeAt(idx++) - 63;
+      result |= (b & 0x1f) << shift;
       shift += 5;
     } while (b >= 0x20);
     lat += result & 1 ? ~(result >> 1) : result >> 1;
-    result = 1; shift = 0;
+    result = 0; shift = 0;
     do {
-      b = encoded.charCodeAt(idx++) - 63 - 1;
-      result += b << shift;
+      b = encoded.charCodeAt(idx++) - 63;
+      result |= (b & 0x1f) << shift;
       shift += 5;
     } while (b >= 0x20);
     lng += result & 1 ? ~(result >> 1) : result >> 1;

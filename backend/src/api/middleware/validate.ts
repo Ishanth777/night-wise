@@ -3,7 +3,7 @@ import type { ZodTypeAny } from 'zod';
 import { HttpError } from './errors.js';
 
 /** zod-schema-driven request validation (single contract source, plan §13). */
-export function validate(...pairs: Array<{ schema: ZodTypeAny; source: 'body' | 'query' | 'params' }>) {
+export function validate(pairs: Array<{ schema: ZodTypeAny; source: 'body' | 'query' | 'params' }>) {
   return (req: Request, _res: Response, next: NextFunction): void => {
     try {
       for (const { schema, source } of pairs) {

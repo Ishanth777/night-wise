@@ -2,7 +2,7 @@
 import express, { type Express } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
-import pinoHttp from 'pino-http';
+import { pinoHttp } from 'pino-http';
 import { getEnv } from '../config/env.js';
 import log from '../lib/logger.js';
 import { authRoutes } from './routes/auth.routes.js';
@@ -28,7 +28,7 @@ export function createApp(): Express {
   }));
   app.use(express.json({ limit: '100kb' }));
   app.use(pinoHttp({ logger: log, redact: ['req.headers.authorization'] }));
-  app.use(rateLimitGlobal());
+  app.use(rateLimitGlobal);
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true, version: '1.0', time: new Date().toISOString() });

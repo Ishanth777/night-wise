@@ -32,5 +32,44 @@ services:
       - ../data/valhalla:/data/valhalla
       - ../tiles:/custom_files
 
+  # Production API image (plan §17.1). Start with:
+  #   JWT_SECRET=... JWT_REFRESH_SECRET=... \
+  #     docker compose -f infra/docker-compose.yml --profile api up -d --build
+  # Apply migrations first: ./scripts/migrate.sh
+  api:
+    profiles: ["api"]
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: nightwise-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      valhalla:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      LOG_LEVEL: info
+      DATABASE_URL: postgres://nightwise:nightwise@postgres:5432/nightwise
+      REDIS_URL: redis://redis:6379
+      VALHALLA_URL: http://valhalla:8002
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (openssl rand -hex 32)}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET (openssl rand -hex 32)}
+      NOMINATIM_URL: ${NOMINATIM_URL:-https://nominatim.openstreetmap.org}
+      NOMINATIM_APP_NAME: ${NOMINATIM_APP_NAME:-nightwise}
+      PHOTON_URL: ${PHOTON_URL:-}
+      PLACES_ENABLED: ${PLACES_ENABLED:-false}
+      GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      SERVICE_BBOX_W: ${SERVICE_BBOX_W:-77.30}
+      SERVICE_BBOX_E: ${SERVICE_BBOX_E:-77.90}
+      SERVICE_BBOX_S: ${SERVICE_BBOX_S:-12.70}
+      SERVICE_BBOX_N: ${SERVICE_BBOX_N:-13.25}
+    ports: ["3000:3000"]
+    restart: unless-stopped
+
 volumes:
   nightwise_pgdata:

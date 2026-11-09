@@ -22,7 +22,8 @@ export function scoreSegments(input: SegmentInput[], ctx: ScoringContext): {
   lightCoverage: number[];
 } {
   const cfg = SCORING.modes[ctx.mode];
-  const hour = ctx.at.getHours();
+  // Business hours and activity priors are IST wall-clock (plan FR-105).
+  const hour = new Date(ctx.at.getTime() + 5.5 * 3600e3).getUTCHours();
   const segments: SegmentOutput[] = [];
   const lightCoverage: number[] = [];
   let startM = 0;

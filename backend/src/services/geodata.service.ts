@@ -35,7 +35,8 @@ export async function corridorData(req: CorridorRequest): Promise<SegmentInput[]
     }));
 
     // 1 - batch insert segments + critical road class (majority intersecting road class)
-    await client.query('CREATE TEMP TABLE seg_idx (i int primary key, g geometry(LineString,4326), hw text) ON COMMIT DROP', []);
+    await client.query('CREATE TEMP TABLE IF NOT EXISTS seg_idx (i int primary key, g geometry(LineString,4326), hw text)', []);
+    await client.query('TRUNCATE seg_idx', []);
     for (let i = 0; i < segs.length; i++) {
       await client.query(
         `INSERT INTO seg_idx (i, g, hw)
@@ -49,19 +50,27 @@ export async function corridorData(req: CorridorRequest): Promise<SegmentInput[]
       );
     }
 
-    const [lights, shops, reports, emergency, hwRows] = await Promise.all([
-      lightsQuery(client, req),
-      shopsQuery(client, req),
-      reportsQuery(client, req),
-      emergencyQuery(client, req),
-      (async () => {
-        const res = await client.query(`SELECT i, hw FROM seg_idx`, []);
-        const m: Record<number, string> = {};
-        for (const r of res.rows as Array<{ i: string; hw: string }>) m[Number(r.i)] = r.hw;
-        return m;
-      })(),
-    ]);
+    const tq = Date.now();
+    const times: Record<string, number> = {};
+    const timed = async <T>(name: string, fn: () => Promise<T>): Promise<T> => {
+      const t = Date.now();
+      const v = await fn();
+      times[name] = Date.now() - t;
+      return v;
+    };
+    const lights = await timed('lights', () => lightsQuery(client, req));
+    const shops = await timed('shops', () => shopsQuery(client, req));
+    const reports = await timed('reports', () => reportsQuery(client, req));
+    const emergency = await timed('emergency', () => emergencyQuery(client, req));
+    const hwRows = await timed('hw', async () => {
+      const res = await client.query(`SELECT i, hw FROM seg_idx`, []);
+      const m: Record<number, string> = {};
+      for (const r of res.rows as Array<{ i: string; hw: string }>) m[Number(r.i)] = r.hw;
+      return m;
+    });
 
+    log.debug({ segments: segs.length, ms: Date.now() - tq, times }, 'corridor queries done');
+    await client.query('DROP TABLE IF EXISTS seg_idx');
     return buildSegmentInputs(segs, req, lights, shops, reports, emergency, hwRows);
   } finally {
     client.release();
@@ -86,18 +95,18 @@ async function lightsQuery(client: PoolClient, req: CorridorRequest): Promise<Li
     `WITH s AS (SELECT i, g FROM seg_idx),
       per AS (
         SELECT s.i,
-         (SELECT count(*) FROM streetlights l WHERE ST_DWithin(l.geom, s.g, $1)) AS cnt,
-         (SELECT count(*) FROM streetlights l WHERE ST_DWithin(l.geom, s.g, $1) AND l.verified) AS verified,
+         (SELECT count(*) FROM streetlights l WHERE ST_DWithin(l.geom::geography, s.g::geography, $1)) AS cnt,
+         (SELECT count(*) FROM streetlights l WHERE ST_DWithin(l.geom::geography, s.g::geography, $1) AND l.verified) AS verified,
          (SELECT min(EXTRACT(epoch FROM (now() - l.source_updated_at)) / 86400.0)
-            FROM streetlights l WHERE ST_DWithin(l.geom, s.g, $1) AND l.source_updated_at IS NOT NULL) AS max_age,
+            FROM streetlights l WHERE ST_DWithin(l.geom::geography, s.g::geography, $1) AND l.source_updated_at IS NOT NULL) AS max_age,
          (SELECT coalesce(max(gap),0) * ST_Length(s.g::geography) FROM (
             SELECT ST_LineLocatePoint(s.g, l.geom)
               - lag(ST_LineLocatePoint(s.g, l.geom)) OVER (ORDER BY ST_LineLocatePoint(s.g, l.geom)) AS gap
-            FROM streetlights l WHERE ST_DWithin(l.geom, s.g, $1)
+            FROM streetlights l WHERE ST_DWithin(l.geom::geography, s.g::geography, $1)
           ) gaps) AS max_gap,
          (SELECT count(*) FROM (
             SELECT (SELECT EXISTS (SELECT 1 FROM streetlights l
-                     WHERE ST_DWithin(l.geom, ST_LineInterpolatePoint(s.g, f.f), $1))) AS lit
+                     WHERE ST_DWithin(l.geom::geography, ST_LineInterpolatePoint(s.g, f.f)::geography, $1))) AS lit
             FROM generate_series(0, $2, 1.0 / $2) AS f(f)
           ) q WHERE q.lit) AS covered
         FROM s
@@ -122,21 +131,33 @@ async function lightsQuery(client: PoolClient, req: CorridorRequest): Promise<Li
       maxAgeDays: row.max_age != null ? Number(row.max_age) : null,
     };
   }
-  // Fallback: partial fake-free estimate via OSM lit=yes tags on the covered way
-  // (plan §6.3 layer 1): if the road tagged lit=yes and no point dataset exists,
-  // we produce a conservative estimate — coverage prior — provenance 'osm'.
+  // Fallback (plan §6.3 layer 1): no verified lamp-post points exist for
+  // Bengaluru yet, so use the mapped OSM `lit` tag on the segment's dominant
+  // road. This is real, attributable data — never a fabricated lamp post.
+  //   lit=yes / 24/7  -> conservative 70% coverage, provenance 'osm'
+  //   lit=no / down   -> 0% coverage, provenance 'osm' (a real negative signal)
   const tagRes = await client.query(
-    `SELECT s.i, r.lit_tag FROM seg_idx s
-     JOIN roads r ON ST_Intersects(r.geom, s.g)
-     WHERE r.lit_tag IS NOT NULL LIMIT 200`,
+    `SELECT s.i,
+       (SELECT r.lit_tag FROM roads r
+        WHERE ST_Intersects(r.geom, s.g)
+        ORDER BY ST_Length(ST_Intersection(r.geom, s.g)) DESC
+        LIMIT 1) AS lit_tag
+     FROM seg_idx s`,
     [],
   );
   for (const row of tagRes.rows as Array<Record<string, unknown>>) {
     const i = Number(row.i);
-    if (out[i]) continue;
-    if (String(row.lit_tag) === 'yes' || String(row.lit_tag) === '24/7') {
+    if (!out[i] || out[i].count > 0) continue;
+    const tag = row.lit_tag == null ? null : String(row.lit_tag);
+    if (tag === 'yes' || tag === '24/7') {
       out[i] = {
         count: 0, verified: 0, covered: Math.round(SEG_SAMPLE_POINTS * 0.7),
+        sampled: SEG_SAMPLE_POINTS, maxGapM: null,
+        provenance: 'osm', maxAgeDays: null,
+      };
+    } else if (tag === 'no' || tag === 'down') {
+      out[i] = {
+        count: 0, verified: 0, covered: 0,
         sampled: SEG_SAMPLE_POINTS, maxGapM: null,
         provenance: 'osm', maxAgeDays: null,
       };
@@ -161,10 +182,11 @@ async function shopsQuery(client: PoolClient, req: CorridorRequest): Promise<Sho
      FROM seg_idx s
      JOIN LATERAL (
        SELECT * FROM shops x
-       WHERE ST_DWithin(x.geom, s.g, $1)
-       ORDER BY ST_Distance(x.geom, s.g) DESC LIMIT 40
+       WHERE x.geom && ST_Expand(s.g, $3::float8)
+         AND ST_DWithin(x.geom::geography, s.g::geography, $1)
+       ORDER BY ST_Distance(x.geom, s.g) ASC LIMIT 40
      ) sh ON true`,
-    [req.corridorM, atIso],
+    [req.corridorM, atIso, req.corridorM / 111320.0],
   );
 
   const out: ShopsRows = {};
@@ -205,7 +227,7 @@ async function reportsQuery(client: PoolClient, req: CorridorRequest): Promise<R
     `SELECT s.i, r.severity, r.trust_score, r.created_at,
             ST_SnapToGrid(r.geom, 0.0009)::text AS cell
      FROM seg_idx s
-     JOIN safety_reports r ON ST_DWithin(r.geom, s.g, 60)
+     JOIN safety_reports r ON ST_DWithin(r.geom::geography, s.g::geography, 60)
      WHERE r.status = 'published'
        AND r.created_at >= now() - interval '90 days'`,
     [],
@@ -237,7 +259,7 @@ async function emergencyQuery(client: PoolClient, req: CorridorRequest): Promise
             min(ST_Distance(e.geom::geography, s.g::geography)) FILTER (WHERE e.type='police') AS police_m,
             min(ST_Distance(e.geom::geography, s.g::geography)) FILTER (WHERE e.type='hospital') AS hospital_m
      FROM seg_idx s
-     JOIN emergency_locations e ON ST_DWithin(e.geom, s.g, 2000)
+     JOIN emergency_locations e ON ST_DWithin(e.geom::geography, s.g::geography, 2000)
      GROUP BY s.i`,
     [],
   );
@@ -310,8 +332,8 @@ function buildSegmentInputs(
 
 /** IST local hour (plan: business hours compare IST wall-clock). */
 export function istHour(at: Date): number {
-  const ist = new Date(at.getTime() + (330 - at.getTimezoneOffset()) * 60e3);
-  return ist.getHours();
+  // Epoch + 5.5 h, read as UTC — independent of the server's local timezone.
+  return new Date(at.getTime() + 5.5 * 3600e3).getUTCHours();
 }
 
 function polylineLengthM(coords: number[][]): number {

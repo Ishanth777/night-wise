@@ -1,5 +1,30 @@
-node_modules
-dist
+# dependencies
+node_modules/
+
+# builds
+dist/
+app/build/
+app/.dart_tool/
+*.tsbuildinfo
+coverage/
+
+# local configuration / secrets
 .env
-data/*.pbf
+.env.*
+!.env.example
+
+# logs / OS noise
 *.log
+.DS_Store
+
+# raw geodata (rebuild with scripts/fetch-and-clip-data.sh)
+data/*.pbf
+data/*.osm.pbf
+data/*.geojsonseq
+data/_*
+data/valhalla/
+tiles/
+
+# Flutter tooling
+app/.flutter-plugins
+app/.flutter-plugins-dependencies

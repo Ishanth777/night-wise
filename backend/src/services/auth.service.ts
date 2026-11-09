@@ -5,7 +5,8 @@
  */
 import bcrypt from 'bcrypt';
 import crypto from 'node:crypto';
-import { sign, verify, type JwtPayload } from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
+import type { JwtPayload } from 'jsonwebtoken';
 import { findByEmail, findById, insert, insertRefreshToken, findValidRefreshToken, revokeRefreshTokenFamily, deleteUserData } from '../repositories/users.repo.js';
 import { ensure } from './ranking.service.js';
 import { getEnv } from '../config/env.js';
@@ -19,7 +20,6 @@ export interface Session {
 }
 
 const BCRYPT_ROUNDS = 12;
-constACCESS_MINUTES = undefined; // replaced below
 
 export async function register(email: string, password: string, displayName: string | null, fingerprint: string | null): Promise<Session> {
   const env = getEnv();
@@ -71,14 +71,14 @@ export async function deleteAccount(userId: string): Promise<void> {
 
 export function verifyAccessToken(token: string): JwtPayload & { sub: string; role: string } {
   const env = getEnv();
-  const payload = verify(token, env.JWT_SECRET) as JwtPayload & { sub: string; role: string };
+  const payload = jwt.verify(token, env.JWT_SECRET) as JwtPayload & { sub: string; role: string };
   return payload;
 }
 
 // ---------------------------------------------------------------- internal
 
 function issueTokens(userId: string, email: string, role: string, env: ReturnType<typeof getEnv>, fingerprint: string | null) {
-  const access = sign({ sub: userId, email, role }, env.JWT_SECRET, { expiresIn: '15m' });
+  const access = jwt.sign({ sub: userId, email, role }, env.JWT_SECRET, { expiresIn: '15m' });
   const refresh = crypto.randomBytes(48).toString('base64url');
   const expires = new Date(Date.now() + 30 * 86400e3);
   void insertRefreshToken(userId, crypto.createHash('sha256').update(refresh).digest('hex'), expires);

@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import { existsSync } from 'node:fs';
+
+// Load .env for local dev (Node >=20.6). Production supplies real env vars.
+if (existsSync('.env') && typeof process.loadEnvFile === 'function') {
+  try { process.loadEnvFile('.env'); } catch { /* already loaded */ }
+}
 
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),

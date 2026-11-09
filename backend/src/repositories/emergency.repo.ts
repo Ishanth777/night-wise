@@ -21,7 +21,7 @@ export async function nearby(
             ST_Y(geom) AS lat, ST_X(geom) AS lng
      FROM emergency_locations
      WHERE ($4::text IS NULL OR type = $4)
-       AND ST_DWithin(geom, ST_SetSRID(ST_MakePoint($3, $2), 4326)::geography, $1::float)
+       AND ST_DWithin(geom::geography, ST_SetSRID(ST_MakePoint($3, $2), 4326)::geography, $1::float)
      ORDER BY dist_m ASC LIMIT 30`,
     [radiusM, lat, lng, type ?? null],
   );

@@ -155,7 +155,10 @@ function splitAt250(coords: number[][]): number[][][] {
   let cur: number[][] = [coords[0]];
   let len = 0;
   for (let i = 1; i < coords.length; i++) {
-    const step = haversineM(coords[i - 1], coords[i]);
+    const step = haversineM(
+      [coords[i - 1][1], coords[i - 1][0]],
+      [coords[i][1], coords[i][0]],
+    );
     if (cur.length >= 2 && len + step > 250) {
       segs.push(cur);
       cur = [coords[i - 1]];
@@ -201,7 +204,9 @@ function dedupeByIdentity(evaluated: Evaluated[]): Evaluated[] {
 /** fraction of sampled anchor vertices that lie within ~20 m of the other geometry */
 function sharedEndsRatio(a: number[][], b: number[][]): number {
   const sample = [a[Math.floor(a.length * 0.25)] ?? a[0], a[Math.floor(a.length * 0.75)] ?? a[0]];
-  const hit = sample.filter((p) => b.some((q) => haversineM(p, q) < 20)).length;
+  const hit = sample.filter((p) =>
+    b.some((q) => haversineM([p[1], p[0]], [q[1], q[0]]) < 20),
+  ).length;
   return hit / sample.length;
 }
 
