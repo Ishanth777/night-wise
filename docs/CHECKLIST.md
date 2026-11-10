@@ -1,7 +1,7 @@
 # NightWise — implementation checklist
 
 Source of truth: [`IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md).
-Last verified: **2026-11-09** against the live Docker stack on macOS arm64.
+Last verified: **2026-11-10** against the live Docker stack on macOS arm64.
 
 Legend: ✅ implemented & verified · ⚠️ implemented with a documented limitation ·
 ⛔ deliberately not built (MVP scope / missing external input).
@@ -117,7 +117,8 @@ Legend: ✅ implemented & verified · ⚠️ implemented with a documented limit
   `flutter build web --release`: **succeeds**.
 - ⚠️ Web map is a canvas preview (upstream `maplibre_gl_web` 0.21 incompatible
   with Flutter 3.47). Native Android/iOS use real MapLibre GL.
-- ⚠️ Android debug APK: see “Build verification” below.
+- ✅ Android debug APK built successfully (`app-debug.apk`, Flutter 3.47.9,
+  Gradle 9.3.1, JDK 25); not device-tested in this environment.
 - ⛔ iOS binary/device test (no Xcode).
 
 ## Phase 6 — Integration & hardening
@@ -144,6 +145,8 @@ Legend: ✅ implemented & verified · ⚠️ implemented with a documented limit
 ## Phase 8 — Deployment & release
 
 - ✅ Production API image + compose profile + healthcheck.
+- ✅ Built image smoke-tested on the compose network: health, login and a
+  real two-route walk recommendation succeeded inside the container.
 - ⛔ CI/CD pipeline, managed secrets, TLS proxy, backups/restore drill, Play
   Store signing, staged rollout, crash dashboards — out of scope for this
   workspace and require external accounts.
@@ -159,13 +162,14 @@ Legend: ✅ implemented & verified · ⚠️ implemented with a documented limit
 | `flutter analyze` | ✅ no issues |
 | `flutter test` (9) | ✅ pass |
 | `flutter build web --release` | ✅ built |
-| `flutter build apk --debug` | _recorded below after the build completes_ |
+| `flutter build apk --debug` | ✅ `app-debug.apk` built |
+| `docker run nightwise-api:test` | ✅ health + login + recommend on `nightwise_default` |
 
 Android build note: the first attempt failed while downloading Gradle 9.3.1
-from GitHub (HTTP 504 from the redirect target). The download was retried; the
-build then ran under JDK 25 and Gradle 9.3.1. Any JDK/Gradle incompatibility is
-an environment issue, not an app-code issue; the web/analysis/test results above
-are independent of it.
+from GitHub (HTTP 504 from the redirect target). After retrying the download,
+Gradle 9.3.1 + JDK 25 assembled the debug APK successfully. The emulator/device
+was not exercised, so runtime map rendering on native still needs a manual
+smoke test.
 
 ## Honest limitations (must be carried into any release review)
 
