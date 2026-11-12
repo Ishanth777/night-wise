@@ -25,6 +25,21 @@ void main() {
       expect(midway, closeTo(total / 2, 120));
     });
 
+    test('remaining distance includes segments after the closest one', () {
+      final line = <List<double>>[
+        [77.6000, 12.9700],
+        [77.6000, 12.9701],
+        [77.6000, 12.9800],
+      ];
+      final total = Geo.polylineLengthM(line);
+      final firstLeg = Geo.polylineLengthM(<List<double>>[line[0], line[1]]);
+      final fromStart = Geo.remainingAlongM(line, 12.9700, 77.6000);
+      final afterFirstLeg = Geo.remainingAlongM(line, 12.9701, 77.6000);
+      expect(fromStart, closeTo(total, 5));
+      expect(afterFirstLeg, closeTo(total - firstLeg, 5));
+      expect(afterFirstLeg, greaterThan(total * 0.9));
+    });
+
     test('compass maps bearings to eight directions', () {
       expect(Geo.compass(0), 'N');
       expect(Geo.compass(90), 'E');
@@ -146,6 +161,46 @@ void main() {
         departureTime: DateTime(2026, 11, 9, 22, 0),
       );
       expect(request.toJson()['vehicleType'], 'two_wheeler');
+    });
+  });
+
+  group('Profile and community parsing', () {
+    test('profile defaults are honest when settings are missing', () {
+      final profile = UserProfile.fromJson({
+        'userId': 'u1',
+        'email': 'a@example.test',
+        'role': 'user',
+        'createdAt': '2026-11-11T10:00:00.000Z',
+        'stats': {'reportsSubmitted': 2, 'votesCast': 1, 'savedRoutes': 0},
+        'savedRoutes': const [],
+      });
+      expect(profile.settings.safetyVsTime, 0.8);
+      expect(profile.settings.defaultMode, 'walk');
+      expect(profile.settings.avoidSteps, isFalse);
+      expect(profile.reportsSubmitted, 2);
+      expect(profile.savedRoutes, isEmpty);
+    });
+
+    test('community votes keep counts and the caller state', () {
+      final report = CommunityReport.fromJson({
+        'id': 7,
+        'kind': 'poor_lighting',
+        'severity': 3,
+        'note': 'Lamp out',
+        'lat': 12.9756,
+        'lng': 77.6040,
+        'createdAt': '2026-11-11T10:00:00.000Z',
+        'confirmations': 2,
+        'denials': 0,
+        'myVote': 'confirm',
+      });
+      expect(report.kind, ReportKind.poorLighting);
+      expect(report.confirmations, 2);
+      expect(report.myVote, 'confirm');
+      final updated = report.withVote({'confirmations': 1, 'denials': 1, 'myVote': 'deny'});
+      expect(updated.confirmations, 1);
+      expect(updated.denials, 1);
+      expect(updated.myVote, 'deny');
     });
   });
 

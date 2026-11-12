@@ -53,8 +53,9 @@ class Geo {
     double lng,
   ) {
     if (coordinates.length < 2) return -1;
+    final total = polylineLengthM(coordinates);
     var bestDist = double.infinity;
-    var bestRemaining = 0.0;
+    var bestTravelled = 0.0;
     var cumulative = 0.0;
     for (var i = 1; i < coordinates.length; i++) {
       final a = coordinates[i - 1];
@@ -63,11 +64,11 @@ class Geo {
       final projection = _project(a, b, lat, lng);
       if (projection.distance < bestDist) {
         bestDist = projection.distance;
-        bestRemaining = cumulative + segLen * (1 - projection.fraction);
+        bestTravelled = cumulative + segLen * projection.fraction;
       }
       cumulative += segLen;
     }
-    return bestRemaining;
+    return (total - bestTravelled).clamp(0.0, total);
   }
 
   static _Projection _project(

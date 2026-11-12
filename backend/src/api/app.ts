@@ -10,6 +10,7 @@ import { routeRoutes } from './routes/routes.routes.js';
 import { reportRoutes } from './routes/reports.routes.js';
 import { emergencyRoutes } from './routes/emergency.routes.js';
 import { placeRoutes } from './routes/places.routes.js';
+import { meRoutes } from './routes/me.routes.js';
 import { errorHandler, notFoundHandler } from './middleware/errors.js';
 import { rateLimitGlobal } from './middleware/ratelimit.js';
 
@@ -39,6 +40,7 @@ export function createApp(): Express {
   app.use('/api/reports', reportRoutes);
   app.use('/api/emergency', emergencyRoutes);
   app.use('/api/places', placeRoutes);
+  app.use('/api/me', meRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

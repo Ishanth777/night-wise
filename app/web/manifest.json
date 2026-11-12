@@ -1,12 +1,12 @@
 {
-    "name": "nightwise",
-    "short_name": "nightwise",
+    "name": "NightWise — Safer routes after dark",
+    "short_name": "NightWise",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#ECECE6",
+    "theme_color": "#121410",
+    "description": "Safety-ranked night navigation for Bengaluru. Compare routes by street lighting, open businesses, footfall and community reports.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

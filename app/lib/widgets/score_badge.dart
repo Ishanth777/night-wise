@@ -1,55 +1,70 @@
 import 'package:flutter/material.dart';
 
 import '../core/theme/theme.dart';
+import 'nw_kit.dart';
 
-/// Score is always colour + number + word — never colour alone
-/// (plan §12.4 accessibility).
+/// Safety score ring. The score is always presented as number + word, with the
+/// arc as a secondary cue — never colour alone.
 class ScoreBadge extends StatelessWidget {
   const ScoreBadge({
     super.key,
     required this.score,
     this.size = 64,
     this.grade,
+    this.onDark = false,
   });
 
   final int score;
   final double size;
   final String? grade;
+  final bool onDark;
 
   @override
   Widget build(BuildContext context) {
-    final color = NwTheme.scoreColor(score);
     final word = grade ?? NwTheme.scoreWord(score);
+    final arc = NwTheme.scoreColor(score);
     return Semantics(
       label: 'Safety score $score out of 100, $word',
-      child: Container(
+      child: SizedBox(
         width: size,
         height: size,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.14),
-          shape: BoxShape.circle,
-          border: Border.all(color: color, width: 2),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Stack(
+          fit: StackFit.expand,
           children: [
-            Text(
-              '$score',
-              style: TextStyle(
-                color: color,
-                fontSize: size * 0.34,
-                fontWeight: FontWeight.w800,
-                height: 1,
-              ),
+            CircularProgressIndicator(
+              value: (score / 100).clamp(0.02, 1.0),
+              strokeWidth: size * 0.055,
+              backgroundColor: onDark ? Colors.white12 : NwColors.line,
+              valueColor: AlwaysStoppedAnimation<Color>(arc),
+              strokeCap: StrokeCap.round,
             ),
-            const SizedBox(height: 2),
-            Text(
-              word,
-              style: TextStyle(
-                color: color,
-                fontSize: size * 0.15,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.4,
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '$score',
+                    style: TextStyle(
+                      fontFamily: 'SpaceGrotesk',
+                      fontSize: size * 0.31,
+                      fontWeight: FontWeight.w700,
+                      height: 1,
+                      letterSpacing: -1,
+                      color: onDark ? NwColors.onDark : NwColors.ink,
+                    ),
+                  ),
+                  SizedBox(height: size * 0.03),
+                  Text(
+                    word,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: size * 0.115,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.2,
+                      color: onDark ? NwColors.onDarkMuted : NwColors.textMuted,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -60,24 +75,27 @@ class ScoreBadge extends StatelessWidget {
 }
 
 class ConfidencePill extends StatelessWidget {
-  const ConfidencePill({super.key, required this.confidence});
+  const ConfidencePill({super.key, required this.confidence, this.onDark = false});
 
   final double confidence;
+  final bool onDark;
 
   @override
   Widget build(BuildContext context) {
     final pct = (confidence * 100).round();
-    final color = NwTheme.confidenceColor(confidence);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        'confidence $pct%',
-        style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w600),
-      ),
+    final label = confidence >= 0.6
+        ? 'high confidence'
+        : confidence >= 0.35
+            ? 'partial data'
+            : 'limited data';
+    return NwPill(
+      label: '$label · $pct%',
+      icon: confidence >= 0.6 ? Icons.verified_outlined : Icons.info_outline,
+      color: onDark
+          ? NwColors.onDarkMuted
+          : (confidence >= 0.35 ? NwColors.textMuted : NwColors.warning),
+      background: onDark ? Colors.transparent : NwColors.panel,
+      border: !onDark,
     );
   }
 }
@@ -88,33 +106,21 @@ class StatusChip extends StatelessWidget {
     required this.label,
     this.color = NwColors.textMuted,
     this.icon,
+    this.background,
   });
 
   final String label;
   final Color color;
   final IconData? icon;
+  final Color? background;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 13, color: color),
-            const SizedBox(width: 5),
-          ],
-          Text(
-            label,
-            style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
+    return NwPill(
+      label: label,
+      icon: icon,
+      color: color,
+      background: background ?? NwColors.panel,
     );
   }
 }

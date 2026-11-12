@@ -42,6 +42,33 @@ export const ModerateReportSchema = z.object({
   note: z.string().max(500).optional(),
 });
 
+/** Confirm/deny an existing published report (moderation signal only). */
+export const VoteReportSchema = z.object({
+  vote: z.enum(['confirm', 'deny']),
+});
+export type VoteReport = z.infer<typeof VoteReportSchema>;
+
+export const UserSettingsSchema = z.object({
+  safetyVsTime: z.number().min(0).max(1).optional(),
+  defaultMode: ModeSchema.optional(),
+  vehicleType: z.enum(['car', 'two_wheeler']).nullable().optional(),
+  avoidSteps: z.boolean().optional(),
+}).refine((value) => Object.keys(value).length > 0, {
+  message: 'Provide at least one setting',
+});
+export type UserSettings = z.infer<typeof UserSettingsSchema>;
+
+export const SavedRouteSchema = z.object({
+  label: z.string().min(1).max(80),
+  mode: ModeSchema,
+  origin: z.object({ lat: LatSchema, lng: LngSchema }),
+  destination: z.object({ lat: LatSchema, lng: LngSchema }),
+});
+
+export const RouteIdSchema = z.object({
+  routeId: z.string().regex(/^rt_[a-f0-9]{16,}$/i, 'Invalid route id'),
+});
+
 export const RegisterSchema = z.object({
   email: z.string().email().max(320),
   password: z.string().min(8).max(72),

@@ -73,3 +73,5 @@ services:
 
 volumes:
   nightwise_pgdata:
+    # Pin the real volume name so data survives project-name changes.
+    name: nightwise_pgdata

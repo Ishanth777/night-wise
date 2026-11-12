@@ -48,7 +48,7 @@ class ReportsRepository {
     return ReportReceipt.fromJson(data.cast<String, dynamic>(), notice);
   }
 
-  Future<List<Map<String, dynamic>>> nearby({
+  Future<List<CommunityReport>> nearby({
     required LatLngPoint at,
     int radiusM = 800,
   }) async {
@@ -58,6 +58,16 @@ class ReportsRepository {
       'radiusM': radiusM,
     });
     if (data is! List) return const [];
-    return data.whereType<Map>().map((e) => e.cast<String, dynamic>()).toList();
+    return data
+        .whereType<Map>()
+        .map((e) => CommunityReport.fromJson(e.cast<String, dynamic>()))
+        .toList();
+  }
+
+  /// Confirm (`confirm`) or deny (`deny`) a published report. The backend
+  /// treats votes as a moderation signal, never as a direct publish switch.
+  Future<Map<String, dynamic>> vote({required int id, required String vote}) async {
+    final data = await _api.post('/reports/$id/vote', data: {'vote': vote});
+    return (data as Map).cast<String, dynamic>();
   }
 }

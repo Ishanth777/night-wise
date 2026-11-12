@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'core/models/models.dart';
 import 'core/theme/theme.dart';
 import 'features/auth/auth_screen.dart';
+import 'features/community/community_reports_screen.dart';
 import 'features/emergency/emergency_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/navigation/navigation_screen.dart';
@@ -58,14 +59,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/routes',
-        builder: (context, state) => const RoutesScreen(),
+        pageBuilder: (context, state) =>
+            const NoTransitionPage(child: RoutesScreen()),
       ),
       GoRoute(
         path: '/navigation',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final args = state.extra;
-          if (args is! NavigationArgs) return const _MissingArgumentScreen();
-          return NavigationScreen(args: args);
+          return NoTransitionPage(
+            child: args is NavigationArgs
+                ? NavigationScreen(args: args)
+                : const _MissingArgumentScreen(),
+          );
         },
       ),
       GoRoute(
@@ -93,6 +98,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/profile',
         builder: (context, state) => const ProfileScreen(),
+      ),
+      GoRoute(
+        path: '/community',
+        builder: (context, state) => const CommunityReportsScreen(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

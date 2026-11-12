@@ -1,7 +1,7 @@
 # NightWise — implementation checklist
 
 Source of truth: [`IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md).
-Last verified: **2026-11-10** against the live Docker stack on macOS arm64.
+Last verified: **2026-11-11** against the live Docker stack on macOS arm64.
 
 Legend: ✅ implemented & verified · ⚠️ implemented with a documented limitation ·
 ⛔ deliberately not built (MVP scope / missing external input).
@@ -77,10 +77,10 @@ Legend: ✅ implemented & verified · ⚠️ implemented with a documented limit
   `/api/routes/recommend`, `/api/routes/upstream-health`,
   `/api/emergency/nearby`, `/api/places/search`,
   `/api/reports` + `/api/reports/nearby` + moderator queue/moderation.
-- ⚠️ Deferred endpoints from the plan catalog: `GET /routes/:routeId` (the
-  recommend payload already carries full segments), report voting
-  (`POST /reports/:id/vote`), and `/me/profile` + `/me/settings` (the profile
-  screen is informational in the MVP).
+- ✅ Completed plan catalog: `GET /routes/:routeId` (24-hour durable detail
+  archive), `POST /reports/:id/vote` (confirm/deny moderation signal),
+  `GET /me/profile`, `PATCH /me/settings`, and saved routes
+  (`GET/POST/DELETE /me/saved-routes`, capped at two per account).
 
 ## Phase 4 — Safety scoring engine
 
@@ -107,6 +107,10 @@ Legend: ✅ implemented & verified · ⚠️ implemented with a documented limit
   warnings, report/emergency shortcuts; honest “waiting for GPS” state.
 - ✅ Safety details: indicator bars, provenance chips, weakest stretches,
   route risk strip; engine warning codes humanized (no raw codes in UI).
+- ✅ Profile: live stats, editable trip defaults (safety/time, mode,
+  avoid-steps), saved routes, and archived-route reload.
+- ✅ Community screen: published reports nearby with confirm/deny voting and
+  honest empty/error states.
 - ✅ Accessibility: score is always colour + number + word; semantics labels;
   text scaling clamped; 44 px touch targets.
 - ✅ Error/loading/empty states on every screen; location permission requested
@@ -125,10 +129,11 @@ Legend: ✅ implemented & verified · ⚠️ implemented with a documented limit
 
 - ✅ Backend unit tests: **16 passing** (scoring, aggregation, polyline
   regression).
-- ✅ Live integration tests: **10 passing** (`RUN_INTEGRATION=1`), including
-  walk/vehicle routes, out-of-area guard, emergency, reports, refresh rotation,
+- ✅ Live integration tests: **12 passing** (`RUN_INTEGRATION=1`), including
+  walk/vehicle routes, route-detail reload, out-of-area guard, emergency,
+  reports, voting, profile/settings, saved routes, refresh rotation and
   account deletion.
-- ✅ API smoke script: **18 checks**, creates and deletes a throwaway account
+- ✅ API smoke script: **26 checks**, creates and deletes a throwaway account
   (`scripts/smoke-api.sh`).
 - ✅ Out-of-service-area guard on client and server.
 - ✅ Privacy: no location history, hashed device fingerprint, fuzzed report
@@ -157,8 +162,8 @@ Legend: ✅ implemented & verified · ⚠️ implemented with a documented limit
 |---|---|
 | `npm run typecheck` (backend) | ✅ clean |
 | `npm test` (backend, 16) | ✅ pass |
-| `npm run test:integration` (10) | ✅ pass |
-| `./scripts/smoke-api.sh` (18) | ✅ pass |
+| `npm run test:integration` (12) | ✅ pass |
+| `./scripts/smoke-api.sh` (26) | ✅ pass |
 | `flutter analyze` | ✅ no issues |
 | `flutter test` (9) | ✅ pass |
 | `flutter build web --release` | ✅ built |

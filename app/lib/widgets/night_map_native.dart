@@ -102,16 +102,22 @@ class NightMapState extends State<NightMap> {
       if (geometry.length < 2) continue;
       final highlighted =
           widget.highlightedRouteId == null || route.routeId == widget.highlightedRouteId;
+      // White casing keeps the lime line legible on the grayscale map.
       await controller.addLine(
         LineOptions(
           geometry: geometry,
-          lineColor: _hex(
-            highlighted
-                ? NwTheme.scoreColor(route.summary.safetyScore)
-                : NwColors.limited,
-          ),
-          lineWidth: highlighted ? 6 : 4,
-          lineOpacity: highlighted ? 0.95 : 0.5,
+          lineColor: '#F8F8F3',
+          lineWidth: highlighted ? 11 : 7,
+          lineOpacity: highlighted ? 0.95 : 0.7,
+          lineJoin: 'round',
+        ),
+      );
+      await controller.addLine(
+        LineOptions(
+          geometry: geometry,
+          lineColor: highlighted ? '#C8F25B' : '#8B8F83',
+          lineWidth: highlighted ? 6.5 : 4,
+          lineOpacity: highlighted ? 1 : 0.65,
           lineJoin: 'round',
         ),
       );
@@ -122,9 +128,9 @@ class NightMapState extends State<NightMap> {
         CircleOptions(
           geometry: LatLng(widget.origin!.lat, widget.origin!.lng),
           circleRadius: 7,
-          circleColor: _hex(NwColors.primary),
-          circleStrokeWidth: 2,
-          circleStrokeColor: '#0B1220',
+          circleColor: '#C8F25B',
+          circleStrokeWidth: 3,
+          circleStrokeColor: '#121410',
         ),
       );
     }
@@ -133,9 +139,9 @@ class NightMapState extends State<NightMap> {
         CircleOptions(
           geometry: LatLng(widget.destination!.lat, widget.destination!.lng),
           circleRadius: 8,
-          circleColor: _hex(NwColors.risky),
-          circleStrokeWidth: 2,
-          circleStrokeColor: '#0B1220',
+          circleColor: '#121410',
+          circleStrokeWidth: 3,
+          circleStrokeColor: '#F8F8F3',
         ),
       );
     }
@@ -144,17 +150,12 @@ class NightMapState extends State<NightMap> {
         CircleOptions(
           geometry: LatLng(widget.current!.lat, widget.current!.lng),
           circleRadius: 7,
-          circleColor: '#60A5FA',
+          circleColor: '#C8F25B',
           circleStrokeWidth: 3,
-          circleStrokeColor: '#FFFFFF',
+          circleStrokeColor: '#121410',
         ),
       );
     }
-  }
-
-  String _hex(Color color) {
-    final value = color.toARGB32() & 0xFFFFFF;
-    return '#${value.toRadixString(16).padLeft(6, '0').toUpperCase()}';
   }
 
   @override
@@ -162,9 +163,9 @@ class NightMapState extends State<NightMap> {
     final style = _style;
     if (style == null) {
       return const ColoredBox(
-        color: NwColors.night,
+        color: NwColors.canvas,
         child: Center(
-          child: CircularProgressIndicator(color: NwColors.primary),
+          child: CircularProgressIndicator(color: NwColors.ink),
         ),
       );
     }

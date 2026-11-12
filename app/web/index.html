@@ -1,49 +1,83 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="NightWise — safety-ranked night navigation for Bengaluru.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="NightWise — safety-ranked night navigation for Bengaluru. Routes ranked by lighting, open businesses, footfall and community reports.">
+  <meta name="theme-color" content="#ECECE6">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="NightWise">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
-
-  <title>NightWise</title>
+  <title>NightWise — Safer routes after dark</title>
   <link rel="manifest" href="manifest.json">
-  <!-- maplibre_gl web backend (plan §5.1) -->
-  <script src="https://unpkg.com/maplibre-gl@^4.3/dist/maplibre-gl.js"></script>
-  <link href="https://unpkg.com/maplibre-gl@^4.3/dist/maplibre-gl.css" rel="stylesheet">
+
+  <!-- Local MapLibre GL JS: real OSM tiles, styled to the NightWise map. -->
+  <link href="maplibre/maplibre-gl.css" rel="stylesheet">
+  <link href="maplibre/nightwise.css" rel="stylesheet">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #ecece6;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    #nw-boot {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #ecece6;
+      z-index: 9999;
+      transition: opacity 280ms ease;
+    }
+    #nw-boot.hidden { opacity: 0; pointer-events: none; }
+    .nw-boot-mark {
+      width: 56px;
+      height: 56px;
+      border-radius: 18px;
+      background: #121410;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: nw-breathe 1.6s ease-in-out infinite;
+    }
+    .nw-boot-mark svg { width: 28px; height: 28px; }
+    @keyframes nw-breathe {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(0.93); }
+    }
+  </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
+  <div id="nw-boot" aria-hidden="true">
+    <div class="nw-boot-mark">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M20 14.5A8 8 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5Z" fill="#C8F25B"/>
+      </svg>
+    </div>
+  </div>
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
+  <script src="maplibre/maplibre-gl.js"></script>
+  <script src="maplibre/nightwise_map.js"></script>
   <script src="flutter_bootstrap.js" async></script>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var boot = document.getElementById('nw-boot');
+      if (boot) {
+        boot.classList.add('hidden');
+        setTimeout(function () { boot.remove(); }, 320);
+      }
+    });
+  </script>
 </body>
 </html>

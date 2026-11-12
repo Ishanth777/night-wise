@@ -6,6 +6,7 @@ import '../core/models/models.dart';
 import '../data/auth/auth_repository.dart';
 import '../data/emergency/emergency_repository.dart';
 import '../data/location/location_service.dart';
+import '../data/profile/profile_repository.dart';
 import '../data/reports/reports_repository.dart';
 import '../data/routes/route_repository.dart';
 
@@ -36,6 +37,10 @@ final reportsRepositoryProvider = Provider<ReportsRepository>(
 
 final emergencyRepositoryProvider = Provider<EmergencyRepository>(
   (ref) => EmergencyRepository(ref.watch(apiClientProvider)),
+);
+
+final profileRepositoryProvider = Provider<ProfileRepository>(
+  (ref) => ProfileRepository(ref.watch(apiClientProvider)),
 );
 
 final locationServiceProvider = Provider<LocationService>(
@@ -146,3 +151,16 @@ final emergencyProvider = FutureProvider.autoDispose
 });
 
 final reportPointProvider = StateProvider<LatLngPoint?>((ref) => null);
+
+final reportRadiusProvider = StateProvider<double>((ref) => 1200);
+
+final profileProvider = FutureProvider.autoDispose<UserProfile>((ref) {
+  return ref.watch(profileRepositoryProvider).profile();
+});
+
+final nearbyReportsProvider = FutureProvider.autoDispose
+    .family<List<CommunityReport>, LatLngPoint>((ref, at) async {
+  return ref
+      .watch(reportsRepositoryProvider)
+      .nearby(at: at, radiusM: ref.watch(reportRadiusProvider).round());
+});

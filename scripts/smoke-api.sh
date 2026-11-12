@@ -109,6 +109,11 @@ for r in p["routes"]:
         assert key in r["indicators"], key
         assert r["indicators"][key]["status"], key
 EOF
+ROUTE_ID="$(json 'import json,sys; print(json.load(sys.stdin)["data"]["routes"][0]["routeId"])')"
+request GET "/api/routes/$ROUTE_ID" "" "$ACCESS"
+assert_status 200 "archived route detail by id"
+[[ "$(json 'import json,sys; print(json.load(sys.stdin)["data"]["route"]["routeId"])')" == "$ROUTE_ID" ]] \
+  && ok "route detail matches requested id" || bad "route detail id mismatch"
 
 # ---------------------------------------------------------------- vehicle routes
 VEHICLE_BODY="{\"origin\":{\"lat\":12.9352,\"lng\":77.6245},\"destination\":{\"lat\":12.9763,\"lng\":77.5925},\"mode\":\"vehicle\",\"vehicleType\":\"car\",\"departureTime\":\"$DEPART\",\"userPrefs\":{\"safetyVsTime\":0.7}}"
@@ -133,8 +138,25 @@ assert_status 422 "out-of-service-area rejected"
 REPORT_BODY='{"kind":"poor_lighting","severity":3,"lat":12.9756,"lng":77.6040,"note":"smoke test"}'
 request POST /api/reports "$REPORT_BODY"
 assert_status 201 "anonymous community report accepted"
+PENDING_REPORT_ID="$(json 'import json,sys; print(json.load(sys.stdin)["data"]["id"])')"
 request GET "/api/reports/nearby?lat=12.9756&lng=77.6040&radiusM=800"
 assert_status 200 "nearby reports listed"
+request POST "/api/reports/$PENDING_REPORT_ID/vote" '{"vote":"confirm"}' "$ACCESS"
+assert_status 404 "vote on unmoderated report is refused"
+
+# ---------------------------------------------------------------- profile & prefs
+request GET /api/me/profile "" "$ACCESS"
+assert_status 200 "profile with settings and stats"
+request PATCH /api/me/settings '{"safetyVsTime":0.9,"defaultMode":"walk","avoidSteps":true}' "$ACCESS"
+assert_status 200 "preference defaults patched"
+[[ "$(json 'import json,sys; print(json.load(sys.stdin)["data"]["settings"]["safetyVsTime"])')" == "0.9" ]] \
+  && ok "patched preference persisted" || bad "patched preference missing"
+
+REQUEST_BODY='{"label":"Smoke route","mode":"walk","origin":{"lat":12.9756,"lng":77.6040},"destination":{"lat":12.9763,"lng":77.5925}}'
+request POST /api/me/saved-routes "$REQUEST_BODY" "$ACCESS"
+assert_status 201 "saved route created"
+request GET /api/me/saved-routes "" "$ACCESS"
+assert_status 200 "saved routes listed"
 
 # ---------------------------------------------------------------- places (optional network)
 if [[ "$WITH_PLACES" == true ]]; then

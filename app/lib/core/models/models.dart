@@ -351,4 +351,160 @@ enum ReportKind {
   const ReportKind(this.apiValue, this.label);
   final String apiValue;
   final String label;
+
+  static ReportKind fromApi(String value) => ReportKind.values.firstWhere(
+        (kind) => kind.apiValue == value,
+        orElse: () => ReportKind.other,
+      );
+}
+
+// ------------------------------------------------------- profile & reports
+
+class UserSettings {
+  const UserSettings({
+    this.safetyVsTime = 0.8,
+    this.defaultMode = 'walk',
+    this.vehicleType,
+    this.avoidSteps = false,
+  });
+
+  final double safetyVsTime;
+  final String defaultMode;
+  final String? vehicleType;
+  final bool avoidSteps;
+
+  factory UserSettings.fromJson(Map<String, dynamic>? j) {
+    final raw = j ?? const <String, dynamic>{};
+    return UserSettings(
+      safetyVsTime: _d(raw['safetyVsTime'], 0.8).clamp(0.0, 1.0).toDouble(),
+      defaultMode: raw['defaultMode'] == 'vehicle' ? 'vehicle' : 'walk',
+      vehicleType: raw['vehicleType'] == 'two_wheeler'
+          ? 'two_wheeler'
+          : (raw['vehicleType'] == 'car' ? 'car' : null),
+      avoidSteps: raw['avoidSteps'] == true,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'safetyVsTime': safetyVsTime,
+        'defaultMode': defaultMode,
+        'vehicleType': vehicleType,
+        'avoidSteps': avoidSteps,
+      };
+}
+
+class SavedRoute {
+  const SavedRoute({
+    required this.id,
+    required this.label,
+    required this.mode,
+    required this.origin,
+    required this.destination,
+    required this.createdAt,
+  });
+
+  final int id;
+  final String label;
+  final String mode;
+  final LatLngPoint origin;
+  final LatLngPoint destination;
+  final DateTime createdAt;
+
+  factory SavedRoute.fromJson(Map<String, dynamic> j) => SavedRoute(
+        id: _i(j['id']),
+        label: '${j['label'] ?? 'Saved route'}',
+        mode: '${j['mode'] ?? 'walk'}',
+        origin: LatLngPoint.fromJson((j['origin'] as Map).cast<String, dynamic>()),
+        destination: LatLngPoint.fromJson((j['destination'] as Map).cast<String, dynamic>()),
+        createdAt: DateTime.tryParse('${j['createdAt']}') ?? DateTime.now(),
+      );
+}
+
+class UserProfile {
+  const UserProfile({
+    required this.userId,
+    required this.email,
+    required this.displayName,
+    required this.role,
+    required this.createdAt,
+    required this.settings,
+    required this.reportsSubmitted,
+    required this.votesCast,
+    required this.savedRoutes,
+  });
+
+  final String userId;
+  final String email;
+  final String? displayName;
+  final String role;
+  final DateTime createdAt;
+  final UserSettings settings;
+  final int reportsSubmitted;
+  final int votesCast;
+  final List<SavedRoute> savedRoutes;
+
+  factory UserProfile.fromJson(Map<String, dynamic> j) {
+    final stats = (j['stats'] as Map?)?.cast<String, dynamic>() ?? const {};
+    return UserProfile(
+      userId: '${j['userId']}',
+      email: '${j['email']}',
+      displayName: j['displayName'] as String?,
+      role: '${j['role'] ?? 'user'}',
+      createdAt: DateTime.tryParse('${j['createdAt']}') ?? DateTime.now(),
+      settings: UserSettings.fromJson((j['settings'] as Map?)?.cast<String, dynamic>()),
+      reportsSubmitted: _i(stats['reportsSubmitted']),
+      votesCast: _i(stats['votesCast']),
+      savedRoutes: ((j['savedRoutes'] as List?) ?? const [])
+          .map((r) => SavedRoute.fromJson((r as Map).cast<String, dynamic>()))
+          .toList(),
+    );
+  }
+}
+
+class CommunityReport {
+  const CommunityReport({
+    required this.id,
+    required this.kind,
+    required this.severity,
+    required this.note,
+    required this.point,
+    required this.createdAt,
+    required this.confirmations,
+    required this.denials,
+    required this.myVote,
+  });
+
+  final int id;
+  final ReportKind kind;
+  final int severity;
+  final String? note;
+  final LatLngPoint point;
+  final DateTime createdAt;
+  final int confirmations;
+  final int denials;
+  final String? myVote;
+
+  factory CommunityReport.fromJson(Map<String, dynamic> j) => CommunityReport(
+        id: _i(j['id']),
+        kind: ReportKind.fromApi('${j['kind']}'),
+        severity: _i(j['severity'], 3),
+        note: j['note'] as String?,
+        point: LatLngPoint(_d(j['lat']), _d(j['lng'])),
+        createdAt: DateTime.tryParse('${j['createdAt']}') ?? DateTime.now(),
+        confirmations: _i(j['confirmations']),
+        denials: _i(j['denials']),
+        myVote: j['myVote'] as String?,
+      );
+
+  CommunityReport withVote(Map<String, dynamic> result) => CommunityReport(
+        id: id,
+        kind: kind,
+        severity: severity,
+        note: note,
+        point: point,
+        createdAt: createdAt,
+        confirmations: _i(result['confirmations'], confirmations),
+        denials: _i(result['denials'], denials),
+        myVote: '${result['myVote'] ?? myVote}',
+      );
 }

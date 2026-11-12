@@ -6,6 +6,7 @@ import '../../core/errors/app_failure.dart';
 import '../../core/models/models.dart';
 import '../../core/theme/theme.dart';
 import '../../providers/app_providers.dart';
+import '../../widgets/nw_kit.dart';
 
 class ReportScreen extends ConsumerStatefulWidget {
   const ReportScreen({super.key, this.point});
@@ -27,9 +28,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
   @override
   void initState() {
     super.initState();
-    _point = widget.point ??
-        ref.read(originProvider) ??
-        ref.read(destinationProvider)?.point;
+    _point = widget.point ?? ref.read(originProvider) ?? ref.read(destinationProvider)?.point;
   }
 
   @override
@@ -83,7 +82,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
               const SizedBox(height: 10),
               Text(
                 receipt.moderationNotice,
-                style: const TextStyle(color: NwColors.textMuted, fontSize: 12, height: 1.45),
+                style: NwText.small.copyWith(height: 1.45),
               ),
             ],
           ),
@@ -114,139 +113,203 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
   @override
   Widget build(BuildContext context) {
     final point = _point;
+    final wide = NwBreakpoints.isWide(context);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Report a safety issue')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: NwColors.surface,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
+      backgroundColor: NwColors.canvas,
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Column(
               children: [
-                const Icon(Icons.place_outlined, color: NwColors.primary),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    point == null
-                        ? 'No location selected'
-                        : '${point.lat.toStringAsFixed(5)}, ${point.lng.toStringAsFixed(5)}',
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(wide ? 0 : 16, 14, wide ? 0 : 16, 0),
+                  child: Row(
+                    children: [
+                      NwIconButton(
+                        icon: Icons.arrow_back_rounded,
+                        tooltip: 'Back',
+                        size: 44,
+                        onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
+                      ),
+                      const Spacer(),
+                      const NwWordmark(size: 15),
+                      const Spacer(),
+                      const SizedBox(width: 44),
+                    ],
                   ),
                 ),
-                TextButton(
-                  onPressed: _locating ? null : _useCurrentLocation,
-                  child: _locating
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Use GPS'),
+                Expanded(
+                  child: ListView(
+                    padding: EdgeInsets.fromLTRB(wide ? 0 : 16, 22, wide ? 0 : 16, 32),
+                    children: [
+                      Text('COMMUNITY', style: NwText.eyebrow),
+                      const SizedBox(height: 6),
+                      Text('Report a safety issue', style: NwText.h1),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Reports are reviewed before they affect route scores. '
+                        'Describe places, not people.',
+                        style: NwText.bodyMuted,
+                      ),
+                      const SizedBox(height: 20),
+                      NwCard(
+                        padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: point == null ? NwColors.canvas : NwColors.accentSoft,
+                                borderRadius: BorderRadius.circular(11),
+                              ),
+                              child: Icon(
+                                point == null
+                                    ? Icons.location_off_outlined
+                                    : Icons.place_outlined,
+                                size: 18,
+                                color: NwColors.ink,
+                              ),
+                            ),
+                            const SizedBox(width: 11),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    point == null ? 'No location selected' : 'Report location',
+                                    style: NwText.label.copyWith(fontSize: 12.5),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    point == null
+                                        ? 'Use GPS or open this from a route'
+                                        : '${point.lat.toStringAsFixed(5)}, '
+                                            '${point.lng.toStringAsFixed(5)}',
+                                    style: NwText.small,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: _locating ? null : _useCurrentLocation,
+                              child: _locating
+                                  ? const SizedBox(
+                                      width: 15,
+                                      height: 15,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : const Text('Use GPS'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      const Text('What are you seeing?', style: NwText.h3),
+                      const SizedBox(height: 10),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final columns = constraints.maxWidth > 520 ? 3 : 2;
+                          final spacing = 8.0;
+                          final itemWidth =
+                              (constraints.maxWidth - spacing * (columns - 1)) / columns;
+                          return Wrap(
+                            spacing: spacing,
+                            runSpacing: spacing,
+                            children: [
+                              for (final kind in ReportKind.values)
+                                SizedBox(
+                                  width: itemWidth,
+                                  child: _KindTile(
+                                    kind: kind,
+                                    selected: _kind == kind,
+                                    onTap: () => setState(() => _kind = kind),
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          const Text('How serious is it?', style: NwText.h3),
+                          const Spacer(),
+                          Text(_severityLabel(_severity), style: NwText.small),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          for (var i = 1; i <= 5; i++)
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setState(() => _severity = i),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 160),
+                                  height: 10,
+                                  margin: EdgeInsets.only(right: i == 5 ? 0 : 5),
+                                  decoration: BoxDecoration(
+                                    color: i <= _severity
+                                        ? (i >= 4 ? NwColors.danger : NwColors.ink)
+                                        : NwColors.line,
+                                    borderRadius: BorderRadius.circular(99),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('minor concern', style: NwText.small.copyWith(fontSize: 10.5)),
+                          Text('immediate risk', style: NwText.small.copyWith(fontSize: 10.5)),
+                        ],
+                      ),
+                      const SizedBox(height: 22),
+                      TextField(
+                        controller: _note,
+                        minLines: 3,
+                        maxLines: 5,
+                        maxLength: 500,
+                        decoration: const InputDecoration(
+                          labelText: 'Details (optional)',
+                          hintText: 'e.g. “Streetlight out on the east side, very dark after 9pm”',
+                          alignLabelWithHint: true,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const NwDataNote(
+                        text: 'Anonymous and moderated. Only a hashed device fingerprint is '
+                            'stored. Do not include names or personal details.',
+                        icon: Icons.shield_outlined,
+                      ),
+                      const SizedBox(height: 20),
+                      NwActionButton(
+                        label: _busy ? 'Submitting…' : 'Submit report',
+                        icon: Icons.send_rounded,
+                        busy: _busy,
+                        onPressed: _busy || point == null ? null : _submit,
+                      ),
+                      if (point == null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'A location is required before submitting.',
+                          textAlign: TextAlign.center,
+                          style: NwText.small.copyWith(color: NwColors.danger),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 18),
-          const Text('What are you reporting?',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final kind in ReportKind.values)
-                ChoiceChip(
-                  label: Text(kind.label),
-                  selected: _kind == kind,
-                  onSelected: (_) => setState(() => _kind = kind),
-                ),
-            ],
-          ),
-          const SizedBox(height: 22),
-          Row(
-            children: [
-              const Text('Severity',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-              const Spacer(),
-              Text(
-                _severityLabel(_severity),
-                style: const TextStyle(color: NwColors.primary, fontSize: 12.5),
-              ),
-            ],
-          ),
-          Slider(
-            value: _severity.toDouble(),
-            min: 1,
-            max: 5,
-            divisions: 4,
-            label: '$_severity',
-            activeColor: NwColors.primary,
-            inactiveColor: NwColors.surfaceHigh,
-            onChanged: (value) => setState(() => _severity = value.round()),
-          ),
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('minor', style: TextStyle(color: NwColors.textMuted, fontSize: 11)),
-              Text('serious', style: TextStyle(color: NwColors.textMuted, fontSize: 11)),
-            ],
-          ),
-          const SizedBox(height: 20),
-          TextField(
-            controller: _note,
-            minLines: 3,
-            maxLines: 5,
-            maxLength: 500,
-            decoration: const InputDecoration(
-              labelText: 'Details (optional)',
-              hintText: 'e.g. “Streetlight out on the east side, very dark after 9pm”',
-              alignLabelWithHint: true,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: NwColors.surface,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.shield_outlined, size: 16, color: NwColors.primary),
-                    SizedBox(width: 6),
-                    Text('Privacy & moderation',
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                  ],
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Reports are anonymous and moderated before they affect route scores. '
-                  'Only a hashed device fingerprint is stored. Do not include names or personal details — report places, not people.',
-                  style: TextStyle(color: NwColors.textMuted, fontSize: 12, height: 1.5),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton.icon(
-            onPressed: _busy || point == null ? null : _submit,
-            icon: _busy
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.send_outlined, size: 18),
-            label: Text(_busy ? 'Submitting…' : 'Submit report'),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -262,7 +325,82 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
       case 4:
         return 'Serious';
       default:
-        return 'Severe / immediate risk';
+        return 'Immediate risk';
     }
+  }
+}
+
+class _KindTile extends StatelessWidget {
+  const _KindTile({
+    required this.kind,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final ReportKind kind;
+  final bool selected;
+  final VoidCallback onTap;
+
+  IconData get _icon {
+    switch (kind) {
+      case ReportKind.harassment:
+        return Icons.person_off_outlined;
+      case ReportKind.poorLighting:
+        return Icons.lightbulb_outline;
+      case ReportKind.unsafeIsolated:
+        return Icons.nights_stay_outlined;
+      case ReportKind.noFootpath:
+        return Icons.directions_walk_rounded;
+      case ReportKind.construction:
+        return Icons.construction_outlined;
+      case ReportKind.crowdSafe:
+        return Icons.groups_outlined;
+      case ReportKind.other:
+        return Icons.more_horiz_rounded;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? NwColors.ink : NwColors.panel,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(11, 11, 10, 11),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? NwColors.ink : NwColors.line,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                _icon,
+                size: 16,
+                color: selected ? NwColors.accent : NwColors.inkMuted,
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  kind.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: selected ? NwColors.onDark : NwColors.ink,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

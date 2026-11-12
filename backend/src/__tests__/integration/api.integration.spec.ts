@@ -45,18 +45,21 @@ function istIso(date: Date): string {
 describe.skipIf(!RUN)('NightWise API integration', () => {
   let app: Express;
   let closePool: (() => Promise<void>) | null = null;
+  let pool: typeof import('../../db/pool.js').getPool | null = null;
 
   const email = `it_${Date.now()}_${Math.floor(Math.random() * 1e6)}@nightwise.test`;
   const password = 'integration-pass-123';
   let session: Session;
   let reportId: string | null = null;
+  let walkRouteId: string | null = null;
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     // Import after the env is set so getEnv() validation sees test values.
     const { createApp } = await import('../../api/app.js');
-    const pool = await import('../../db/pool.js');
-    closePool = pool.closePool;
+    const poolModule = await import('../../db/pool.js');
+    pool = poolModule.getPool;
+    closePool = poolModule.closePool;
     app = createApp();
   });
 
@@ -142,6 +145,7 @@ describe.skipIf(!RUN)('NightWise API integration', () => {
     expect(data.disclaimer).toMatch(/environmental estimates/i);
     expect(['HIT', 'MISS']).toContain(data.meta.cache);
 
+    walkRouteId = data.routes[0].routeId;
     for (const route of data.routes) {
       expect(route.routeId).toMatch(/^rt_/);
       expect(['safest', 'fastest', 'balanced', 'alternative']).toContain(route.label);
@@ -177,6 +181,23 @@ describe.skipIf(!RUN)('NightWise API integration', () => {
         expect(route.indicators[key].basis).toBeTruthy();
       }
     }
+  });
+
+  it('serves the archived route detail by id', async () => {
+    expect(walkRouteId).toBeTruthy();
+    const res = await request(app)
+      .get(`/api/routes/${walkRouteId}`)
+      .set('Authorization', `Bearer ${session.accessToken}`)
+      .expect(200);
+    expect(res.body.data.route.routeId).toBe(walkRouteId);
+    expect(res.body.data.mode).toBe('walk');
+    expect(res.body.data.route.segments.length).toBeGreaterThan(0);
+    expect(res.body.data.disclaimer).toMatch(/environmental estimates/i);
+
+    await request(app)
+      .get('/api/routes/rt_00000000000000000000')
+      .set('Authorization', `Bearer ${session.accessToken}`)
+      .expect(404);
   });
 
   it('returns vehicle routes for a longer trip', async () => {
@@ -253,6 +274,117 @@ describe.skipIf(!RUN)('NightWise API integration', () => {
       expect(Number.isFinite(place.lat)).toBe(true);
       expect(Number.isFinite(place.lng)).toBe(true);
     }
+  });
+
+  it('exposes and updates profile preferences with a two-route cap', async () => {
+    const profile = await request(app)
+      .get('/api/me/profile')
+      .set('Authorization', `Bearer ${session.accessToken}`)
+      .expect(200);
+    expect(profile.body.data.email).toBe(email.toLowerCase());
+    expect(profile.body.data.stats.savedRoutes).toBe(0);
+
+    const patched = await request(app)
+      .patch('/api/me/settings')
+      .set('Authorization', `Bearer ${session.accessToken}`)
+      .send({ safetyVsTime: 0.9, defaultMode: 'vehicle', avoidSteps: true })
+      .expect(200);
+    expect(patched.body.data.settings.safetyVsTime).toBe(0.9);
+    expect(patched.body.data.settings.defaultMode).toBe('vehicle');
+    expect(patched.body.data.settings.avoidSteps).toBe(true);
+
+    const empty = await request(app)
+      .patch('/api/me/settings')
+      .set('Authorization', `Bearer ${session.accessToken}`)
+      .send({})
+      .expect(400);
+    expect(empty.body.error.code).toBe('INVALID_BODY');
+
+    for (let i = 0; i < 2; i++) {
+      await request(app)
+        .post('/api/me/saved-routes')
+        .set('Authorization', `Bearer ${session.accessToken}`)
+        .send({ label: `Home ${i}`, mode: 'walk', origin: MG_ROAD, destination: CUBBON_PARK })
+        .expect(201);
+    }
+    const capped = await request(app)
+      .post('/api/me/saved-routes')
+      .set('Authorization', `Bearer ${session.accessToken}`)
+      .send({ label: 'Third', mode: 'walk', origin: MG_ROAD, destination: CUBBON_PARK })
+      .expect(409);
+    expect(capped.body.error.code).toBe('CONFLICT');
+
+    const listed = await request(app)
+      .get('/api/me/saved-routes')
+      .set('Authorization', `Bearer ${session.accessToken}`)
+      .expect(200);
+    expect(listed.body.data).toHaveLength(2);
+
+    const removed = await request(app)
+      .delete(`/api/me/saved-routes/${listed.body.data[0].id}`)
+      .set('Authorization', `Bearer ${session.accessToken}`)
+      .expect(204);
+    expect(removed.body).toEqual({});
+  });
+
+  it('accepts confirm/deny votes on a published report but not on your own', async () => {
+    // Anonymous reports have no owner, so create one while signed in to prove
+    // the self-vote guard. There is no public moderator endpoint for good
+    // reason, so the test publishes the fixture directly.
+    const created = await request(app)
+      .post('/api/reports')
+      .set('Authorization', `Bearer ${session.accessToken}`)
+      .send({ kind: 'unsafe_isolated', severity: 4, lat: MG_ROAD.lat, lng: MG_ROAD.lng })
+      .expect(201);
+    const ownedId = String(created.body.data.id);
+    await pool!().query("UPDATE safety_reports SET status = 'published' WHERE id = $1", [ownedId]);
+
+    const own = await request(app)
+      .post(`/api/reports/${ownedId}/vote`)
+      .set('Authorization', `Bearer ${session.accessToken}`)
+      .send({ vote: 'confirm' })
+      .expect(403);
+    expect(own.body.error.code).toBe('FORBIDDEN');
+
+    const voterEmail = `voter_${Date.now()}@nightwise.test`;
+    const voter = await request(app)
+      .post('/api/auth/register')
+      .send({ email: voterEmail, password })
+      .expect(201);
+    const voterToken = (voter.body.data as Session).accessToken;
+
+    const voted = await request(app)
+      .post(`/api/reports/${ownedId}/vote`)
+      .set('Authorization', `Bearer ${voterToken}`)
+      .send({ vote: 'confirm' })
+      .expect(200);
+    expect(voted.body.data.confirmations).toBe(1);
+    expect(voted.body.data.myVote).toBe('confirm');
+    expect(voted.body.data.trustScore).toBeGreaterThan(0.5);
+
+    const nearby = await request(app)
+      .get('/api/reports/nearby')
+      .query({ lat: MG_ROAD.lat, lng: MG_ROAD.lng, radiusM: 800 })
+      .set('Authorization', `Bearer ${voterToken}`)
+      .expect(200);
+    const row = nearby.body.data.find((r: { id: number }) => String(r.id) === ownedId);
+    expect(row).toBeTruthy();
+    expect(row.confirmations).toBe(1);
+    expect(row.myVote).toBe('confirm');
+
+    // Duplicate votes update in place rather than stacking.
+    const denied = await request(app)
+      .post(`/api/reports/${ownedId}/vote`)
+      .set('Authorization', `Bearer ${voterToken}`)
+      .send({ vote: 'deny' })
+      .expect(200);
+    expect(denied.body.data.confirmations).toBe(0);
+    expect(denied.body.data.denials).toBe(1);
+
+    await request(app)
+      .delete('/api/auth/account')
+      .set('Authorization', `Bearer ${voterToken}`)
+      .expect(204);
   });
 
   it('rotates refresh tokens and revokes the account', async () => {

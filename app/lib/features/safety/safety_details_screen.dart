@@ -6,6 +6,7 @@ import '../../core/models/models.dart';
 import '../../core/theme/theme.dart';
 import '../../core/utils/warnings.dart';
 import '../../widgets/indicator_bar.dart';
+import '../../widgets/nw_kit.dart';
 import '../../widgets/score_badge.dart';
 
 class SafetyDetailsScreen extends ConsumerWidget {
@@ -31,233 +32,221 @@ class SafetyDetailsScreen extends ConsumerWidget {
     final sortedSegments = [...route.segments]..sort((a, b) => a.score.compareTo(b.score));
     final weakest = sortedSegments.take(5).toList();
     final summary = route.summary;
+    final wide = NwBreakpoints.isWide(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Why this score?')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: NwColors.surface,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: NwColors.surfaceHigh),
-            ),
-            child: Row(
+      backgroundColor: NwColors.canvas,
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Column(
               children: [
-                ScoreBadge(score: summary.safetyScore, size: 76, grade: summary.safetyGrade),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                Padding(
+                  padding: EdgeInsets.fromLTRB(wide ? 0 : 16, 14, wide ? 0 : 16, 0),
+                  child: Row(
                     children: [
-                      Text(
-                        '${route.labelTitle} route',
-                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                      NwIconButton(
+                        icon: Icons.arrow_back_rounded,
+                        tooltip: 'Back to routes',
+                        size: 44,
+                        onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${summary.durationText} · ${summary.distanceText}',
-                        style: const TextStyle(color: NwColors.textMuted, fontSize: 13),
-                      ),
-                      const SizedBox(height: 8),
-                      ConfidencePill(confidence: summary.confidence),
+                      const Spacer(),
+                      const NwWordmark(size: 15),
+                      const Spacer(),
+                      const SizedBox(width: 44),
                     ],
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          const _SectionTitle('Indicator breakdown'),
-          const SizedBox(height: 4),
-          const Text(
-            'Each indicator is scored per road segment, then weighted and length-adjusted. '
-            'Weights lean toward lighting and street activity at night.',
-            style: TextStyle(color: NwColors.textMuted, fontSize: 12.5, height: 1.5),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            decoration: BoxDecoration(
-              color: NwColors.surface,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Column(
-              children: [
-                for (final indicator in indicators)
-                  IndicatorBar(indicator: indicator),
-              ],
-            ),
-          ),
-          if (route.warnings.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            const _SectionTitle('Warnings'),
-            const SizedBox(height: 8),
-            for (final warning in _humanWarnings(route.warnings))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.warning_amber_rounded,
-                        size: 17, color: NwColors.moderate),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        warning,
-                        style: const TextStyle(fontSize: 13, height: 1.45),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-          if (route.segments.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            const _SectionTitle('Safety along the route'),
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: Row(
-                children: [
-                  for (final segment in route.segments)
-                    Expanded(
-                      flex: segment.lengthM.round().clamp(1, 250),
-                      child: Container(
-                        height: 10,
-                        color: NwTheme.scoreColor(segment.score),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('start', style: TextStyle(color: NwColors.textMuted, fontSize: 11)),
-                Text('destination', style: TextStyle(color: NwColors.textMuted, fontSize: 11)),
-              ],
-            ),
-            const SizedBox(height: 14),
-            if (weakest.isNotEmpty) ...[
-              const Text(
-                'Weakest stretches',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-              ),
-              const SizedBox(height: 8),
-              for (final segment in weakest)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: NwColors.surface,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                Expanded(
+                  child: ListView(
+                    padding: EdgeInsets.fromLTRB(wide ? 0 : 16, 18, wide ? 0 : 16, 32),
                     children: [
-                      ScoreBadge(score: segment.score, size: 42),
-                      const SizedBox(width: 12),
-                      Expanded(
+                      Text('SCORE EXPLAINED', style: NwText.eyebrow),
+                      const SizedBox(height: 6),
+                      Text('Why this route scores ${summary.safetyScore}', style: NwText.h1),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Every indicator is scored per road segment, then weighted and '
+                        'length-adjusted. Missing data lowers confidence — it is never '
+                        'treated as zero.',
+                        style: NwText.bodyMuted,
+                      ),
+                      const SizedBox(height: 18),
+                      _ScoreHero(route: route),
+                      const SizedBox(height: 18),
+                      const NwSectionHeading(
+                        eyebrow: 'INDICATORS',
+                        title: 'What shaped this score',
+                      ),
+                      const SizedBox(height: 10),
+                      NwCard(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              '${_metres(segment.startM)} – ${_metres(segment.endM)} along route',
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              segment.warnings.isNotEmpty
-                                  ? humanizeWarning(segment.warnings.first)
-                                  : _reason(segment),
-                              style: const TextStyle(
-                                color: NwColors.textMuted,
-                                fontSize: 12,
-                                height: 1.4,
-                              ),
-                            ),
+                            for (final indicator in indicators)
+                              IndicatorBar(indicator: indicator),
                           ],
                         ),
                       ),
+                      if (route.warnings.isNotEmpty) ...[
+                        const SizedBox(height: 22),
+                        const NwSectionHeading(
+                          eyebrow: 'WARNINGS',
+                          title: 'Things to know',
+                        ),
+                        const SizedBox(height: 10),
+                        for (final warning in _humanWarnings(route.warnings))
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: NwColors.warningSoft,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(
+                                    Icons.warning_amber_rounded,
+                                    size: 16,
+                                    color: NwColors.warning,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      warning,
+                                      style: const TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 12,
+                                        height: 1.45,
+                                        color: NwColors.ink,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                      if (route.segments.isNotEmpty) ...[
+                        const SizedBox(height: 22),
+                        const NwSectionHeading(
+                          eyebrow: 'ALONG THE ROUTE',
+                          title: 'Safety by stretch',
+                        ),
+                        const SizedBox(height: 12),
+                        _RouteStrip(route: route),
+                        const SizedBox(height: 20),
+                        if (weakest.isNotEmpty) ...[
+                          const Text('Weakest stretches', style: NwText.label),
+                          const SizedBox(height: 8),
+                          for (final segment in weakest)
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: NwColors.panel,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: NwColors.line),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  ScoreBadge(score: segment.score, size: 44),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${_metres(segment.startM)} – ${_metres(segment.endM)} '
+                                          'along route',
+                                          style: NwText.label.copyWith(fontSize: 12),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          segment.warnings.isNotEmpty
+                                              ? humanizeWarning(segment.warnings.first)
+                                              : _reason(segment),
+                                          style: NwText.small.copyWith(fontSize: 11),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ],
+                      const SizedBox(height: 22),
+                      const NwSectionHeading(
+                        eyebrow: 'PROVENANCE',
+                        title: 'Where the data comes from',
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          NwPill(
+                            label: 'lighting: ${route.streetlightProvenance.replaceAll('_', ' ')}',
+                            icon: Icons.lightbulb_outline,
+                            color: route.hasLimitedLightingData
+                                ? NwColors.textMuted
+                                : NwColors.ink,
+                            background: route.hasLimitedLightingData
+                                ? NwColors.panel
+                                : NwColors.accentSoft,
+                            border: route.hasLimitedLightingData,
+                          ),
+                          const NwPill(
+                            label: 'hours: OSM + known gaps',
+                            icon: Icons.schedule_rounded,
+                          ),
+                          const NwPill(
+                            label: 'community: moderated',
+                            icon: Icons.forum_outlined,
+                          ),
+                        ],
+                      ),
+                      if (route.dataNotes.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Text(route.dataNotes, style: NwText.small),
+                      ],
+                      const SizedBox(height: 18),
+                      const NwDataNote(
+                        text: 'NightWise safety scores are environmental estimates, not '
+                            'guarantees of personal safety. Trust your instincts — if a '
+                            'street feels wrong, leave it.',
+                        icon: Icons.info_outline_rounded,
+                      ),
+                      const SizedBox(height: 16),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          final midpoint = route.coordinates.isEmpty
+                              ? null
+                              : route.coordinates[route.coordinates.length ~/ 2];
+                          context.push(
+                            '/report',
+                            extra: midpoint == null
+                                ? null
+                                : LatLngPoint(midpoint[1], midpoint[0]),
+                          );
+                        },
+                        icon: const Icon(Icons.flag_outlined, size: 18),
+                        label: const Text('Report an issue on this route'),
+                      ),
+                      const SizedBox(height: 8),
                     ],
-                  ),
-                ),
-            ],
-          ],
-          const SizedBox(height: 20),
-          const _SectionTitle('Data provenance'),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              StatusChip(
-                label: 'lighting: ${route.streetlightProvenance.replaceAll('_', ' ')}',
-                icon: Icons.lightbulb_outline,
-                color: route.hasLimitedLightingData ? NwColors.limited : NwColors.safe,
-              ),
-              const StatusChip(
-                label: 'hours: OSM + known gaps',
-                icon: Icons.schedule,
-                color: NwColors.textMuted,
-              ),
-              const StatusChip(
-                label: 'community: moderated',
-                icon: Icons.people_outline,
-                color: NwColors.textMuted,
-              ),
-            ],
-          ),
-          if (route.dataNotes.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              route.dataNotes,
-              style: const TextStyle(color: NwColors.textMuted, fontSize: 12, height: 1.5),
-            ),
-          ],
-          const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: NwColors.primary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.info_outline, size: 17, color: NwColors.primary),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'NightWise safety scores are environmental estimates, not guarantees of personal safety. '
-                    'Trust your instincts — if a street feels wrong, leave it.',
-                    style: TextStyle(fontSize: 12, height: 1.5),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: () {
-              final midpoint = route.coordinates.isEmpty
-                  ? null
-                  : route.coordinates[route.coordinates.length ~/ 2];
-              context.push(
-                '/report',
-                extra: midpoint == null
-                    ? null
-                    : LatLngPoint(midpoint[1], midpoint[0]),
-              );
-            },
-            icon: const Icon(Icons.flag_outlined, size: 18),
-            label: const Text('Report an issue on this route'),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -279,19 +268,151 @@ class SafetyDetailsScreen extends ConsumerWidget {
         .toList()
       ..sort((a, b) => a.value.score.compareTo(b.value.score));
     if (weak.isEmpty) return 'Limited verified data for this stretch.';
-    return 'Lowest signal: ${weak.first.value.label.toLowerCase()} (${weak.first.value.score}/100).';
+    return 'Lowest signal: ${weak.first.value.label.toLowerCase()} '
+        '(${weak.first.value.score}/100).';
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.text);
-  final String text;
+class _ScoreHero extends StatelessWidget {
+  const _ScoreHero({required this.route});
+  final RouteOption route;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+    final summary = route.summary;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: NwColors.ink,
+        borderRadius: BorderRadius.circular(NwRadii.card),
+      ),
+      child: Row(
+        children: [
+          ScoreBadge(score: summary.safetyScore, size: 84, onDark: true),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: NwColors.accent,
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: Text(
+                    route.labelTitle.toUpperCase(),
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.7,
+                      color: NwColors.ink,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 9),
+                Text(
+                  '${summary.durationText} · ${summary.distanceText}',
+                  style: const TextStyle(
+                    fontFamily: 'SpaceGrotesk',
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.5,
+                    color: NwColors.onDark,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '${NwTheme.scoreLabel(summary.safetyScore)} · '
+                  '${(summary.confidence * 100).round()}% data confidence',
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 11.5,
+                    color: NwColors.onDarkMuted,
+                  ),
+                ),
+                if (summary.tradeOff.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    summary.tradeOff,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 11.5,
+                      height: 1.4,
+                      color: NwColors.onDarkMuted,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RouteStrip extends StatelessWidget {
+  const _RouteStrip({required this.route});
+  final RouteOption route;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: Row(
+            children: [
+              for (final segment in route.segments)
+                Expanded(
+                  flex: (segment.lengthM.round() ~/ 20).clamp(1, 40),
+                  child: Container(
+                    height: 12,
+                    margin: const EdgeInsets.only(right: 1),
+                    color: NwTheme.scoreColor(segment.score),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 7),
+        Row(
+          children: [
+            Text('start', style: NwText.small.copyWith(fontSize: 10)),
+            const Spacer(),
+            for (final entry in const [
+              ('Limited', NwColors.danger),
+              ('Moderate', NwColors.warning),
+              ('Good', NwColors.accentDeep),
+            ])
+              Padding(
+                padding: const EdgeInsets.only(left: 10),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: entry.$2,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      entry.$1,
+                      style: NwText.small.copyWith(fontSize: 9.5),
+                    ),
+                  ],
+                ),
+              ),
+            const Spacer(),
+            Text('destination', style: NwText.small.copyWith(fontSize: 10)),
+          ],
+        ),
+      ],
     );
   }
 }

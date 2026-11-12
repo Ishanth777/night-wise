@@ -1,27 +1,16 @@
 import { Router } from 'express';
 import { validate, asyncWrap } from '../middleware/validate.js';
-import { requireAuth, attachDeviceHash } from '../middleware/auth.js';
-import { CreateReportSchema, ModerateReportSchema, NearbySchema } from '../schemas/index.js';
+import { requireAuth, optionalAuth, attachDeviceHash } from '../middleware/auth.js';
+import { CreateReportSchema, ModerateReportSchema, NearbySchema, VoteReportSchema } from '../schemas/index.js';
 import { reportsRateLimit } from '../middleware/ratelimit.js';
-import { createReport, nearbyReports, listPending, moderate } from '../../repositories/reports.repo.js';
-import { verifyAccessToken } from '../../services/auth.service.js';
+import { createReport, nearbyReports, listPending, moderate, vote } from '../../repositories/reports.repo.js';
+import { HttpError } from '../middleware/errors.js';
 
 export const reportRoutes = Router();
 reportRoutes.use(attachDeviceHash);
 
 /** POST /api/reports — anonymous-capable, pseudonymous, rate-limited (plan §15.4). */
-reportRoutes.post('/', reportsRateLimit,
-  (req, _res, next) => {
-    // optional-auth: works with or without token
-    const header = req.headers.authorization;
-    if (header?.startsWith('Bearer ')) {
-      try {
-        const payload = verifyAccessToken(header.slice(7));
-        (req as { user?: { sub: string; role: string } }).user = { sub: payload.sub, role: payload.role };
-      } catch { /* anonymous allowed */ }
-    }
-    next();
-  },
+reportRoutes.post('/', reportsRateLimit, optionalAuth,
   validate([{ schema: CreateReportSchema, source: 'body' }]),
   asyncWrap(async (req, res) => {
     const input = req.body as Parameters<typeof createReport>[0];
@@ -33,10 +22,31 @@ reportRoutes.post('/', reportsRateLimit,
     });
   }));
 
-reportRoutes.get('/nearby', validate([{ schema: NearbySchema, source: 'query' }]),
+/**
+ * GET /api/reports/nearby — published reports only. When a valid token is
+ * supplied, each row carries the caller's own vote so the client can show a
+ * pressed state without a second request.
+ */
+reportRoutes.get('/nearby', optionalAuth,
+  validate([{ schema: NearbySchema, source: 'query' }]),
   asyncWrap(async (req, res) => {
     const q = req.query as unknown as { lat: number; lng: number; radiusM: number };
-    res.json({ data: await nearbyReports(q.lat, q.lng, q.radiusM) });
+    const user = (req as { user?: { sub: string } }).user ?? null;
+    res.json({ data: await nearbyReports(q.lat, q.lng, q.radiusM, user?.sub ?? null) });
+  }));
+
+/** POST /api/reports/:id/vote — confirm/deny a published report (plan §11.1). */
+reportRoutes.post('/:id/vote', requireAuth,
+  validate([{ schema: VoteReportSchema, source: 'body' }]),
+  asyncWrap(async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new HttpError(400, 'VALIDATION_ERROR', 'Invalid report id');
+    }
+    const user = (req as { user?: { sub: string } }).user!;
+    const body = req.body as { vote: 'confirm' | 'deny' };
+    const result = await vote(id, user.sub, body.vote === 'confirm');
+    res.json({ data: { reportId: id, ...result } });
   }));
 
 // ---- moderation (admin) ----

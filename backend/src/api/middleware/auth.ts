@@ -25,6 +25,22 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
   }
 }
 
+/** Attach the user when a valid bearer token is present; never rejects. */
+export function optionalAuth(req: Request, _res: Response, next: NextFunction): void {
+  const header = req.headers.authorization;
+  if (header?.startsWith('Bearer ')) {
+    try {
+      const payload = verifyAccessToken(header.slice(7));
+      (req as { user?: { sub: string; role: string; email: string } }).user = {
+        sub: payload.sub, role: payload.role, email: typeof payload.email === 'string' ? payload.email : '',
+      };
+    } catch {
+      // anonymous access is allowed
+    }
+  }
+  next();
+}
+
 export function requireRole(...roles: string[]) {
   return (req: Request, _res: Response, next: NextFunction): void => {
     const user = (req as { user?: { role?: string } }).user;

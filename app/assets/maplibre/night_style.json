@@ -1,6 +1,6 @@
 {
   "version": 8,
-  "name": "NightWise Night",
+  "name": "NightWise Quiet Map",
   "sources": {
     "osm": {
       "type": "raster",
@@ -14,17 +14,18 @@
     {
       "id": "background",
       "type": "background",
-      "paint": { "background-color": "#0B1220" }
+      "paint": { "background-color": "#ECECE6" }
     },
     {
       "id": "osm",
       "type": "raster",
       "source": "osm",
       "paint": {
-        "raster-brightness-min": 0.05,
-        "raster-brightness-max": 0.55,
-        "raster-saturation": -0.45,
-        "raster-contrast": 0.15
+        "raster-saturation": -1,
+        "raster-contrast": -0.06,
+        "raster-brightness-min": 0.24,
+        "raster-brightness-max": 0.9,
+        "raster-opacity": 0.94
       }
     }
   ]

@@ -30,11 +30,12 @@ to the Bengaluru service area, and verified on this machine:
 - Walking and vehicle route recommendations return real Valhalla geometry with
   per-250 m segments, per-indicator scores, a confidence value, warnings,
   provenance and an honest data-health block.
-- Emergency lookup, community report intake, geocoding (Photon → Nominatim
-  fallback), registration, login, refresh-token rotation, logout and hard
+- Emergency lookup, community report intake + confirm/deny voting, geocoding
+  (Photon → Nominatim fallback), route-detail reload by id, profile/settings,
+  saved routes, registration, login, refresh-token rotation, logout and hard
   account deletion all work against the live database.
-- 16 backend unit tests, 10 live integration tests, 9 Flutter tests, plus an
-  18-check API smoke script.
+- 16 backend unit tests, 12 live integration tests, Flutter tests, plus a
+  26-check API smoke script.
 
 ## Architecture
 
@@ -94,6 +95,18 @@ flutter run --dart-define=NIGHTWISE_API_URL=http://192.168.1.10:3000/api
 The API is at `http://localhost:3000`; `GET /api/health` should return
 `{"ok":true}`.
 
+### Web preview
+
+If no Android/iOS toolchain is available, the release web build is a supported
+fallback. It uses the same API and shows an honest "Map preview (web)" canvas
+instead of native MapLibre:
+
+```bash
+cd app && flutter build web --release
+cd .. && python3 scripts/serve_web.py 8080
+# open http://127.0.0.1:8080
+```
+
 ### Rebuilding geodata (only needed on a fresh machine)
 
 The repository ships the clipped Bengaluru PBF (44 MB) and Valhalla tiles
@@ -149,6 +162,8 @@ cd app && flutter analyze && flutter test && flutter build web --release
 ## Documentation
 
 - [docs/SETUP.md](docs/SETUP.md) — install, run, rebuild data, configure keys.
+- [docs/API_KEYS_AND_DATA.md](docs/API_KEYS_AND_DATA.md) — every required/optional
+  API key and dataset, with local defaults and verification commands.
 - [docs/CHECKLIST.md](docs/CHECKLIST.md) — plan phase status and known gaps.
 - [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) — the authoritative product
   and engineering blueprint.

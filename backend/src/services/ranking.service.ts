@@ -11,6 +11,7 @@ import { corridorData } from './geodata.service.js';
 import { scoreRoute } from '../scoring/engine.js';
 import { grade, type Mode, type RouteScoreOutput } from '../scoring/types.js';
 import { cacheGet, cacheSet } from '../lib/cache.js';
+import { archiveRouteDetails } from '../repositories/routes.repo.js';
 import log from '../lib/logger.js';
 import type { RecommendRequest } from '../api/schemas/index.js';
 
@@ -51,7 +52,7 @@ export interface RecommendationPayload {
   meta: { took: number; cache: 'HIT' | 'MISS'; version: string };
 }
 
-export async function recommend(req: RecommendRequest): Promise<RecommendationPayload> {
+export async function recommend(req: RecommendRequest, userId: string | null = null): Promise<RecommendationPayload> {
   const t0 = Date.now();
   const at = new Date(req.departureTime); // zod returns string; scoring uses Date
   const cacheKey = recCacheKey(req, at);
@@ -92,7 +93,7 @@ export async function recommend(req: RecommendRequest): Promise<RecommendationPa
   const within = unique.filter((e) => e.candidate.durationS <= fastestS + budgetS || e.idx === 0);
   const usable = within.length >= Math.min(3, unique.length) ? within : unique.slice(0, 3);
 
-  const dtos = usable.map((e) => buildRouteDto(e, usable));
+  const dtos = usable.map((e) => buildRouteDto(e, usable, req.mode));
 
   // labelling (plan §11.2)
   const fastestIdx = usable.reduce((best, e, i) => (e.candidate.durationS < usable[best].candidate.durationS ? i : best), 0);
@@ -127,6 +128,21 @@ export async function recommend(req: RecommendRequest): Promise<RecommendationPa
 
   // plan §11.2: identical (mode+OD rounded+time bucket) requests collapse
   await cacheSet(cacheKey, JSON.stringify({ ...payload, meta: { ...payload.meta, took: 0 } }), 600);
+  // Plan §11.1: `GET /routes/:routeId` must keep working after the 10-minute
+  // recommendation cache expires. Archival is best-effort so a storage hiccup
+  // never breaks the core recommend call.
+  try {
+    await archiveRouteDetails(payload.routes, {
+      userId,
+      mode: payload.mode,
+      computedFor: payload.computedFor,
+      requestId: payload.requestId,
+      disclaimer: payload.disclaimer,
+      dataHealth: payload.dataHealth,
+    });
+  } catch (err) {
+    log.warn({ err }, 'route detail archive failed');
+  }
   log.info({ took: payload.meta.took, n: payload.routes.length }, 'recommend complete');
   return payload;
 }
@@ -210,7 +226,7 @@ function sharedEndsRatio(a: number[][], b: number[][]): number {
   return hit / sample.length;
 }
 
-function buildRouteDto(e: Evaluated, byIndex: Evaluated[]): RouteOptionDto {
+function buildRouteDto(e: Evaluated, byIndex: Evaluated[], mode: Mode): RouteOptionDto {
   const o = e.scored;
   const indicatorOutput: Record<string, unknown> = {};
   const keys = Object.keys(o.segments[0]?.indicators ?? {});
@@ -232,7 +248,7 @@ function buildRouteDto(e: Evaluated, byIndex: Evaluated[]): RouteOptionDto {
   const fastest = byIndex.reduce((f, x) => (x.candidate.durationS < f.candidate.durationS ? x : f));
 
   return {
-    routeId: `rt_${e.idx}_${hashGeometry(e)}`,
+    routeId: routeIdFor(e, mode),
     label: 'alternative',
     summary: {
       distanceM: Math.round(e.candidate.lengthKm * 1000),
@@ -277,6 +293,7 @@ function buildTradeOff(dto: RouteOptionDto, fastest: RouteOptionDto, safest: Rou
     text += `${delta > 0 ? '+' : ''}${delta} safety points vs fastest`;
   }
   if (dto === safest) text += text ? ' — safest option' : 'safest option';
+  if (!text) text = dto === fastest ? 'fastest option' : 'balanced option';
   return text;
 }
 
@@ -313,8 +330,16 @@ function recCacheKey(req: RecommendRequest, at: Date): string {
   return `rec:${req.mode}:${round(req.origin)}:${round(req.destination)}:${bucket}:${req.userPrefs.safetyVsTime}`;
 }
 
-function hashGeometry(e: Evaluated): string {
-  return createHash('sha256').update(JSON.stringify(e.candidate.geometry.slice(0, 1))).digest('hex').slice(0, 6);
+/**
+ * Stable id over the full geometry so `GET /routes/:routeId` cannot collide
+ * when two candidates share a starting vertex.
+ */
+function routeIdFor(e: Evaluated, mode: Mode): string {
+  return `rt_${createHash('sha256')
+    .update(mode)
+    .update(JSON.stringify(e.candidate.geometry))
+    .digest('hex')
+    .slice(0, 20)}`;
 }
 
 function ind(seg: RouteScoreOutput['segments'][number], k: string) {
